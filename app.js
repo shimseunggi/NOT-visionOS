@@ -4,9 +4,9 @@ import {
 } from 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/+esm';
 
 const LONG_PRESS_MS = 700;
-const PINCH_DOWN = 0.055;
-const PINCH_UP = 0.085;
-const PINCH_UP_WHILE_DRAGGING = 0.1;
+const PINCH_DOWN_RATIO = 0.36;
+const PINCH_UP_RATIO = 0.52;
+const PINCH_UP_WHILE_DRAGGING_RATIO = 0.6;
 const PINCH_STABLE_FRAMES = 3;
 const RELEASE_STABLE_FRAMES = 3;
 const LOST_HAND_GRACE_MS = 240;
@@ -194,9 +194,9 @@ function drawDebug(landmarks) {
   ctx.stroke();
 }
 
-function applyPinchRecognition(pinchDistance) {
+function applyPinchRecognition(pinchRatio) {
   if (!state.pinch) {
-    if (pinchDistance < PINCH_DOWN) {
+    if (pinchRatio < PINCH_DOWN_RATIO) {
       state.pinchDownFrames += 1;
       if (state.pinchDownFrames >= PINCH_STABLE_FRAMES) startPinch();
     } else {
@@ -206,8 +206,8 @@ function applyPinchRecognition(pinchDistance) {
     return;
   }
 
-  const releaseThreshold = state.dragging ? PINCH_UP_WHILE_DRAGGING : PINCH_UP;
-  if (pinchDistance > releaseThreshold) {
+  const releaseThreshold = state.dragging ? PINCH_UP_WHILE_DRAGGING_RATIO : PINCH_UP_RATIO;
+  if (pinchRatio > releaseThreshold) {
     state.pinchUpFrames += 1;
     if (state.pinchUpFrames >= RELEASE_STABLE_FRAMES) endPinch();
   } else {
@@ -240,8 +240,11 @@ function updateFromHand(landmarks) {
   const y = (rawY - window.innerHeight / 2) * state.sensitivity * state.cursorSpeed + window.innerHeight / 2;
   moveCursor(x, y);
 
-  const pinchDistance = Math.hypot(thumb.x - tip.x, thumb.y - tip.y);
-  applyPinchRecognition(pinchDistance);
+  const pinchDistance = Math.hypot(thumb.x - tip.x, thumb.y - tip.y, thumb.z - tip.z);
+  const palmAnchor = l[5];
+  const handScale = Math.hypot(palmAnchor.x - l[17].x, palmAnchor.y - l[17].y, palmAnchor.z - l[17].z) || 1;
+  const pinchRatio = pinchDistance / handScale;
+  applyPinchRecognition(pinchRatio);
 
   updatePinchMove();
   drawDebug(l);
@@ -249,7 +252,9 @@ function updateFromHand(landmarks) {
 
 function setupMouseGestureTesting() {
   window.addEventListener('mousedown', (event) => {
-    if (!state.mouseGestureEnabled || event.button !== 0 || !event.shiftKey) return;
+    if (!state.mouseGestureEnabled || event.button !== 0) return;
+    const wantsPinchGesture = event.shiftKey || !!event.target.closest('.resize-handle');
+    if (!wantsPinchGesture) return;
     moveCursor(event.clientX, event.clientY);
     state.mouseGestureActive = true;
     if (!state.pinch) startPinch();
