@@ -1435,10 +1435,11 @@ body.depth-off .app-pages {
   }
 
   .app-window {
-    left: 12px !important;
-    width: calc(100vw - 24px) !important;
-    height: auto !important;
-    min-height: 420px;
+    left: 12px;
+    width: min(640px, calc(100vw - 24px));
+    max-width: calc(100vw - 24px);
+    min-height: 320px;
+    max-height: calc(100vh - 148px);
   }
 
   .snap-preview {
@@ -1459,7 +1460,22 @@ body.depth-off .app-pages {
   }
 
   .resize-handle {
+    display: block;
+  }
+
+  .resize-n,
+  .resize-e,
+  .resize-s,
+  .resize-w,
+  .resize-ne,
+  .resize-nw {
     display: none;
+  }
+
+  .vision-resize-handle {
+    opacity: 0.9;
+    pointer-events: auto;
+    transform: none;
   }
 }
 
