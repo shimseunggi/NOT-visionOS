@@ -252,7 +252,9 @@ function updateFromHand(landmarks) {
 
 function setupMouseGestureTesting() {
   window.addEventListener('mousedown', (event) => {
-    if (!state.mouseGestureEnabled || event.button !== 0 || !event.shiftKey) return;
+    if (!state.mouseGestureEnabled || event.button !== 0) return;
+    const wantsPinchGesture = event.shiftKey || !!event.target.closest('.resize-handle');
+    if (!wantsPinchGesture) return;
     moveCursor(event.clientX, event.clientY);
     state.mouseGestureActive = true;
     if (!state.pinch) startPinch();
