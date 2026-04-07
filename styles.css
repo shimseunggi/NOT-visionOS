@@ -23,8 +23,11 @@ body {
     radial-gradient(700px circle at 50% 92%, rgba(20, 68, 170, 0.35), transparent 62%),
     #060a14;
   overflow: hidden;
+  perspective: 1800px;
 }
 
+.simulator-shell,
+.simulator-glare,
 .aurora-bg,
 .environment-grid {
   position: fixed;
@@ -32,12 +35,40 @@ body {
   pointer-events: none;
 }
 
+.simulator-shell {
+  z-index: 12;
+  background:
+    radial-gradient(150% 90% at 50% -22%, rgba(173, 214, 255, 0.2), transparent 34%),
+    radial-gradient(120% 100% at 50% 130%, rgba(8, 26, 62, 0.68), transparent 64%);
+}
+
+.simulator-shell::before {
+  content: "";
+  position: absolute;
+  inset: 22px;
+  border-radius: 34px;
+  border: 1px solid rgba(178, 215, 255, 0.26);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.06),
+    inset 0 40px 120px rgba(156, 209, 255, 0.09),
+    0 80px 120px rgba(0, 0, 0, 0.5);
+}
+
+.simulator-glare {
+  z-index: 13;
+  opacity: 0.4;
+  background:
+    linear-gradient(115deg, rgba(255, 255, 255, 0.16), transparent 34%),
+    radial-gradient(40% 30% at 85% 0%, rgba(218, 241, 255, 0.18), transparent 68%);
+}
+
 .aurora-bg {
   background:
     radial-gradient(circle at 24% 36%, rgba(110, 193, 255, 0.3), transparent 38%),
     radial-gradient(circle at 75% 65%, rgba(143, 178, 255, 0.22), transparent 40%);
   filter: blur(30px);
-  opacity: 0.8;
+  opacity: 0.9;
+  z-index: 14;
 }
 
 .environment-grid {
@@ -47,6 +78,7 @@ body {
   background-size: 70px 70px;
   mask-image: radial-gradient(circle at 50% 40%, rgba(0, 0, 0, 1), transparent 75%);
   opacity: 0.42;
+  z-index: 16;
 }
 
 body::after {
@@ -81,6 +113,8 @@ body::after {
   gap: 10px;
   padding: 10px 14px 10px 20px;
   z-index: 1000;
+  transform-style: preserve-3d;
+  transform: translateX(-50%) translateZ(40px);
 }
 
 .brand-wrap {
@@ -147,6 +181,8 @@ button {
   width: 100vw;
   height: 100vh;
   overflow: hidden;
+  z-index: 100;
+  transform-style: preserve-3d;
 }
 
 #camera {
@@ -157,9 +193,10 @@ button {
   border: 0;
   border-radius: 0;
   object-fit: cover;
-  opacity: 1;
-  z-index: 50;
+  opacity: 0.56;
+  z-index: 20;
   box-shadow: none;
+  filter: saturate(1.08) contrast(1.04) blur(0.2px);
 }
 
 #overlay {
@@ -182,6 +219,7 @@ button {
   z-index: 900;
   display: grid;
   gap: 12px;
+  transform: translateZ(48px);
 }
 
 .home-launchpad {
@@ -291,6 +329,12 @@ button {
   overflow: hidden;
   min-width: 240px;
   min-height: 160px;
+  transform: translateZ(72px);
+  border: 1px solid rgba(184, 225, 255, 0.26);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.24),
+    0 36px 90px rgba(2, 12, 28, 0.48),
+    0 0 0 1px rgba(207, 232, 255, 0.08);
 }
 
 .window.focused {
@@ -394,15 +438,4 @@ input,
 
 input[type="range"] {
   accent-color: #8eccff;
-}
-
-.aurora-bg,
-.environment-grid,
-.topbar,
-.panel,
-.window,
-.gesture-home-button,
-body::after,
-#overlay {
-  display: none !important;
 }
