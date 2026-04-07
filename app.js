@@ -139,6 +139,12 @@ function showGestureHomeButton() {
   }, 2800);
 }
 
+function openHomePanelFromGesture() {
+  window.clearTimeout(state.gestureHomeTimer);
+  el.gestureHomeButton.classList.remove('visible');
+  el.homePanel.classList.remove('hidden');
+}
+
 function nearestPinchable(target) {
   return target?.closest('.window, .titlebar, .resize-handle, button, input, .scrollable') || null;
 }
@@ -200,7 +206,7 @@ function startPinch() {
   el.cursor.classList.add('pinched');
 
   if (state.palmOpen) {
-    showGestureHomeButton();
+    openHomePanelFromGesture();
   }
 
   const target = document.elementFromPoint(state.smoothed.x, state.smoothed.y);
