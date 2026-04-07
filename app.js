@@ -11,6 +11,9 @@ const PINCH_STABLE_FRAMES = 3;
 const RELEASE_STABLE_FRAMES = 3;
 const LOST_HAND_GRACE_MS = 240;
 const MOTION_DEADZONE_PX = 1.2;
+const CURSOR_INPUT_SMOOTHING = 0.22;
+const CURSOR_JITTER_DEADZONE_PX = 2.2;
+const PINCH_RATIO_SMOOTHING = 0.35;
 
 const state = {
   mode: 'mouse',
@@ -35,6 +38,9 @@ const state = {
   handDetected: false,
   mouseGestureEnabled: true,
   mouseGestureActive: false,
+  stabilizedRaw: null,
+  pinchRatioSmoothed: null,
+  pinchScrollTarget: null,
 };
 
 const el = {
@@ -128,13 +134,13 @@ function startPinch() {
   if (win) topWindow(win);
 
   state.downTarget = target;
+  state.pinchScrollTarget = target.closest('.scrollable');
   dispatchMouse('mousedown', target, state.smoothed.x, state.smoothed.y);
 }
 
 function applyScrollIfNeeded(dx, dy) {
-  const target = document.elementFromPoint(state.smoothed.x, state.smoothed.y);
-  const scroller = target?.closest('.scrollable');
-  if (scroller) {
+  const scroller = state.pinchScrollTarget;
+  if (scroller && document.contains(scroller)) {
     scroller.scrollTop -= dy * 1.8;
     return true;
   }
@@ -147,8 +153,7 @@ function updatePinchMove() {
   const now = performance.now();
   if (!state.longPressFired && now - state.pinchStartAt >= LONG_PRESS_MS) {
     state.longPressFired = true;
-    const target = document.elementFromPoint(state.smoothed.x, state.smoothed.y);
-    dispatchMouse('contextmenu', target, state.smoothed.x, state.smoothed.y);
+    dispatchMouse('contextmenu', state.downTarget, state.smoothed.x, state.smoothed.y);
   }
 
   const dx = state.smoothed.x - state.lastMove.x;
@@ -174,6 +179,7 @@ function endPinch() {
 
   state.pinch = false;
   state.downTarget = null;
+  state.pinchScrollTarget = null;
   state.dragging = false;
   resetPinchCounters();
 }
@@ -195,8 +201,13 @@ function drawDebug(landmarks) {
 }
 
 function applyPinchRecognition(pinchRatio) {
+  state.pinchRatioSmoothed = state.pinchRatioSmoothed == null
+    ? pinchRatio
+    : state.pinchRatioSmoothed + (pinchRatio - state.pinchRatioSmoothed) * PINCH_RATIO_SMOOTHING;
+  const stablePinchRatio = state.pinchRatioSmoothed;
+
   if (!state.pinch) {
-    if (pinchRatio < PINCH_DOWN_RATIO) {
+    if (stablePinchRatio < PINCH_DOWN_RATIO) {
       state.pinchDownFrames += 1;
       if (state.pinchDownFrames >= PINCH_STABLE_FRAMES) startPinch();
     } else {
@@ -207,7 +218,7 @@ function applyPinchRecognition(pinchRatio) {
   }
 
   const releaseThreshold = state.dragging ? PINCH_UP_WHILE_DRAGGING_RATIO : PINCH_UP_RATIO;
-  if (pinchRatio > releaseThreshold) {
+  if (stablePinchRatio > releaseThreshold) {
     state.pinchUpFrames += 1;
     if (state.pinchUpFrames >= RELEASE_STABLE_FRAMES) endPinch();
   } else {
@@ -222,6 +233,8 @@ function updateFromHand(landmarks) {
       state.handDetected = false;
       if (state.pinch) endPinch();
       resetPinchCounters();
+      state.stabilizedRaw = null;
+      state.pinchRatioSmoothed = null;
       ctx.clearRect(0, 0, el.overlay.width, el.overlay.height);
     }
     return;
@@ -236,8 +249,19 @@ function updateFromHand(landmarks) {
 
   const rawX = ((state.mirror ? 1 - tip.x : tip.x) + state.calibration.x) * window.innerWidth;
   const rawY = (tip.y + state.calibration.y) * window.innerHeight;
-  const x = (rawX - window.innerWidth / 2) * state.sensitivity * state.cursorSpeed + window.innerWidth / 2;
-  const y = (rawY - window.innerHeight / 2) * state.sensitivity * state.cursorSpeed + window.innerHeight / 2;
+  if (!state.stabilizedRaw) {
+    state.stabilizedRaw = { x: rawX, y: rawY };
+  } else {
+    const deltaX = rawX - state.stabilizedRaw.x;
+    const deltaY = rawY - state.stabilizedRaw.y;
+    if (Math.hypot(deltaX, deltaY) >= CURSOR_JITTER_DEADZONE_PX) {
+      state.stabilizedRaw.x += deltaX * CURSOR_INPUT_SMOOTHING;
+      state.stabilizedRaw.y += deltaY * CURSOR_INPUT_SMOOTHING;
+    }
+  }
+
+  const x = (state.stabilizedRaw.x - window.innerWidth / 2) * state.sensitivity * state.cursorSpeed + window.innerWidth / 2;
+  const y = (state.stabilizedRaw.y - window.innerHeight / 2) * state.sensitivity * state.cursorSpeed + window.innerHeight / 2;
   moveCursor(x, y);
 
   const pinchDistance = Math.hypot(thumb.x - tip.x, thumb.y - tip.y, thumb.z - tip.z);
