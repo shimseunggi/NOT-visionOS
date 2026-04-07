@@ -3,141 +3,600 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>NOT-visionOS MVP</title>
-    <link rel="stylesheet" href="styles.css" />
+    <title>Spatial Home</title>
+    <link rel="stylesheet" href="./styles.css" />
   </head>
-  <body>
-    <div class="simulator-shell" aria-hidden="true"></div>
-    <div class="simulator-glare" aria-hidden="true"></div>
-    <div class="aurora-bg" aria-hidden="true"></div>
-    <div class="environment-grid" aria-hidden="true"></div>
+  <body data-environment="studio">
+    <div class="vision-home">
+      <div class="scene-backdrop" aria-hidden="true"></div>
+      <div class="scene-overlay" aria-hidden="true"></div>
+      <div class="room-glow" aria-hidden="true"></div>
 
-    <header class="topbar glass-shell">
-      <div class="brand-wrap">
-        <strong>NOT-visionOS</strong>
-        <small>Spatial Interface Prototype</small>
-      </div>
+      <main class="spatial-scene" id="spatial-scene">
+        <section class="launcher-overlay" id="launcher-overlay" aria-hidden="true">
+          <header class="top-hud">
+            <div class="hud-pill brand-pill">
+              <span class="brand-dot"></span>
+              <div>
+                <p class="hud-label">visionOS inspired</p>
+                <strong>Home</strong>
+              </div>
+            </div>
 
-      <div class="status-wrap">
-        <span id="camera-status" class="status off">카메라 꺼짐</span>
-        <span id="mode-status" class="status">모드: mouse</span>
-      </div>
+            <div class="hud-pill status-pill">
+              <div>
+                <p class="hud-label" id="today">Tuesday</p>
+                <strong id="clock">00:00</strong>
+              </div>
+            </div>
+          </header>
 
-      <div class="topbar-actions">
-        <button id="home-toggle" class="ghost-btn">홈</button>
-        <button id="quick-toggle" class="ghost-btn">빠른 설정</button>
-        <button id="control-toggle" class="ghost-btn">제어 센터</button>
-      </div>
-    </header>
+          <aside class="quick-actions glass-capsule" aria-label="Quick actions">
+            <button class="quick-button is-on" type="button" data-toggle="depth" aria-label="Toggle depth">
+              ✦
+            </button>
+            <button class="quick-button is-on" type="button" data-toggle="labels" aria-label="Toggle labels">
+              Aa
+            </button>
+            <button class="quick-button" type="button" data-toggle="dim" aria-label="Toggle room dimming">
+              ◐
+            </button>
+            <button
+              class="quick-button"
+              id="environment-cycle"
+              type="button"
+              data-action="cycle-environment"
+              aria-label="Cycle environment"
+            >
+              ☼
+            </button>
+          </aside>
 
-    <main id="workspace" aria-label="workspace">
-      <section id="home-panel" class="panel home-launchpad hidden">
-        <h2>Home</h2>
-        <p class="panel-subtitle">시선과 손짓으로 앱을 선택하세요.</p>
+          <div class="cluster-halo" aria-hidden="true"></div>
 
-        <div class="launchpad-grid" role="list">
-          <button id="new-window" class="app-icon accent-app" role="listitem">
-            <span class="icon-bubble">＋</span>
-            <span class="icon-label">New Window</span>
-          </button>
-          <button class="app-icon tv-app" role="listitem" type="button">
-            <span class="icon-bubble">tv</span>
-            <span class="icon-label">TV</span>
-          </button>
-          <button class="app-icon music-app" role="listitem" type="button">
-            <span class="icon-bubble">♪</span>
-            <span class="icon-label">Music</span>
-          </button>
-          <button id="open-settings" class="app-icon settings-app" role="listitem">
-            <span class="icon-bubble">⚙</span>
-            <span class="icon-label">Settings</span>
-          </button>
-          <button class="app-icon browser-app" role="listitem" type="button">
-            <span class="icon-bubble">◉</span>
-            <span class="icon-label">Safari</span>
-          </button>
-          <button class="app-icon photos-app" role="listitem" type="button">
-            <span class="icon-bubble">✿</span>
-            <span class="icon-label">Photos</span>
-          </button>
-          <button class="app-icon store-app" role="listitem" type="button">
-            <span class="icon-bubble">A</span>
-            <span class="icon-label">App Store</span>
-          </button>
-          <button class="app-icon mail-app" role="listitem" type="button">
-            <span class="icon-bubble">✉</span>
-            <span class="icon-label">Mail</span>
-          </button>
-          <button class="app-icon message-app" role="listitem" type="button">
-            <span class="icon-bubble">◍</span>
-            <span class="icon-label">Messages</span>
-          </button>
-          <button id="reset-layout" class="app-icon notes-app" role="listitem">
-            <span class="icon-bubble">☰</span>
-            <span class="icon-label">Reset Layout</span>
-          </button>
+          <section class="app-pages" id="app-pages">
+            <div class="app-page active" data-page="0" aria-label="Main apps">
+              <button
+                class="app-bubble dark circle active"
+                type="button"
+                data-title="TV"
+                data-meta="커다란 화면으로 몰입형 콘텐츠를 여는 앱"
+                style="--x: 34%; --y: 18%; --size: 102px; --delay: 0s;"
+              >
+                <span class="bubble-face">
+                  <span class="glyph">tv</span>
+                </span>
+                <span class="bubble-label">TV</span>
+              </button>
+
+              <button
+                class="app-bubble music circle"
+                type="button"
+                data-title="Music"
+                data-meta="음악과 공간 오디오를 바로 재생합니다"
+                style="--x: 46%; --y: 17%; --size: 96px; --delay: 0.08s;"
+              >
+                <span class="bubble-face">
+                  <span class="glyph">♪</span>
+                </span>
+                <span class="bubble-label">Music</span>
+              </button>
+
+              <button
+                class="app-bubble aqua circle"
+                type="button"
+                data-title="Mindfulness"
+                data-meta="잔잔한 집중 세션과 호흡 공간"
+                style="--x: 58%; --y: 17.5%; --size: 96px; --delay: 0.14s;"
+              >
+                <span class="bubble-face">
+                  <span class="glyph">◎</span>
+                </span>
+                <span class="bubble-label">Mindfulness</span>
+              </button>
+
+              <button
+                class="app-bubble dark circle"
+                type="button"
+                data-title="Settings"
+                data-meta="환경, 입력, 계정을 조정합니다"
+                style="--x: 70%; --y: 18%; --size: 104px; --delay: 0.2s;"
+              >
+                <span class="bubble-face">
+                  <span class="glyph">⚙</span>
+                </span>
+                <span class="bubble-label">Settings</span>
+              </button>
+
+              <button
+                class="app-bubble paper rounded"
+                type="button"
+                data-title="Freeform"
+                data-meta="아이디어를 공간 캔버스로 펼칩니다"
+                style="--x: 28%; --y: 35%; --size: 94px; --delay: 0.24s;"
+              >
+                <span class="bubble-face">
+                  <span class="glyph">〰</span>
+                </span>
+                <span class="bubble-label">Freeform</span>
+              </button>
+
+              <button
+                class="app-bubble safari circle"
+                type="button"
+                data-title="Safari"
+                data-meta="공간 안에서 웹을 크게 열어봅니다"
+                style="--x: 40%; --y: 35%; --size: 98px; --delay: 0.3s;"
+              >
+                <span class="bubble-face">
+                  <span class="glyph">↗</span>
+                </span>
+                <span class="bubble-label">Safari</span>
+              </button>
+
+              <button
+                class="app-bubble photos circle"
+                type="button"
+                data-title="Photos"
+                data-meta="추억을 깊이감 있는 장면으로 감상합니다"
+                style="--x: 52%; --y: 35%; --size: 100px; --delay: 0.36s;"
+              >
+                <span class="bubble-face">
+                  <span class="glyph">✿</span>
+                </span>
+                <span class="bubble-label">Photos</span>
+              </button>
+
+              <button
+                class="app-bubble notes rounded"
+                type="button"
+                data-title="Notes"
+                data-meta="작은 메모를 빠르게 남깁니다"
+                style="--x: 64%; --y: 35%; --size: 94px; --delay: 0.42s;"
+              >
+                <span class="bubble-face">
+                  <span class="glyph">▤</span>
+                </span>
+                <span class="bubble-label">Notes</span>
+              </button>
+
+              <button
+                class="app-bubble store circle"
+                type="button"
+                data-title="App Store"
+                data-meta="공간 경험용 앱을 둘러봅니다"
+                style="--x: 76%; --y: 35%; --size: 98px; --delay: 0.48s;"
+              >
+                <span class="bubble-face">
+                  <span class="glyph">A</span>
+                </span>
+                <span class="bubble-label">App Store</span>
+              </button>
+
+              <button
+                class="app-bubble mail circle"
+                type="button"
+                data-title="Mail"
+                data-meta="시선 포커스로 메일을 빠르게 훑습니다"
+                style="--x: 34%; --y: 54%; --size: 98px; --delay: 0.54s;"
+              >
+                <span class="bubble-face">
+                  <span class="glyph">✉</span>
+                </span>
+                <span class="bubble-label">Mail</span>
+              </button>
+
+              <button
+                class="app-bubble messages circle"
+                type="button"
+                data-title="Messages"
+                data-meta="대화를 공간 안의 카드처럼 이어갑니다"
+                style="--x: 48%; --y: 54%; --size: 102px; --delay: 0.6s;"
+              >
+                <span class="bubble-face">
+                  <span class="glyph">●</span>
+                </span>
+                <span class="bubble-label">Messages</span>
+              </button>
+
+              <button
+                class="app-bubble keynote circle"
+                type="button"
+                data-title="Keynote"
+                data-meta="프레젠테이션을 공중에 띄워 발표합니다"
+                style="--x: 62%; --y: 54%; --size: 98px; --delay: 0.66s;"
+              >
+                <span class="bubble-face">
+                  <span class="glyph">⌁</span>
+                </span>
+                <span class="bubble-label">Keynote</span>
+              </button>
+
+            </div>
+
+            <div class="app-page" data-page="1" aria-label="Utility apps">
+              <button
+                class="app-bubble journal rounded"
+                type="button"
+                data-title="Journal"
+                data-meta="하루 기록을 부드러운 카드로 남깁니다"
+                style="--x: 34%; --y: 18%; --size: 102px; --delay: 0s;"
+              >
+                <span class="bubble-face">
+                  <span class="glyph">✎</span>
+                </span>
+                <span class="bubble-label">Journal</span>
+              </button>
+
+              <button
+                class="app-bubble weather circle"
+                type="button"
+                data-title="Weather"
+                data-meta="오늘의 하늘과 공간 조명을 맞춥니다"
+                style="--x: 46%; --y: 17%; --size: 96px; --delay: 0.08s;"
+              >
+                <span class="bubble-face">
+                  <span class="glyph">◌</span>
+                </span>
+                <span class="bubble-label">Weather</span>
+              </button>
+
+              <button
+                class="app-bubble files rounded"
+                type="button"
+                data-title="Files"
+                data-meta="문서를 공간 보드에 정리합니다"
+                style="--x: 58%; --y: 17.5%; --size: 96px; --delay: 0.14s;"
+              >
+                <span class="bubble-face">
+                  <span class="glyph">▥</span>
+                </span>
+                <span class="bubble-label">Files</span>
+              </button>
+
+              <button
+                class="app-bubble calendar rounded"
+                type="button"
+                data-title="Calendar"
+                data-meta="오늘 일정을 한눈에 띄웁니다"
+                style="--x: 70%; --y: 18%; --size: 104px; --delay: 0.2s;"
+              >
+                <span class="bubble-face">
+                  <span class="glyph">31</span>
+                </span>
+                <span class="bubble-label">Calendar</span>
+              </button>
+
+              <button
+                class="app-bubble camera circle"
+                type="button"
+                data-title="Capture"
+                data-meta="주변 장면을 즉시 공간 사진으로 저장합니다"
+                style="--x: 28%; --y: 35%; --size: 94px; --delay: 0.24s;"
+              >
+                <span class="bubble-face">
+                  <span class="glyph">◉</span>
+                </span>
+                <span class="bubble-label">Capture</span>
+              </button>
+
+              <button
+                class="app-bubble maps rounded"
+                type="button"
+                data-title="Maps"
+                data-meta="장소를 탁자 위 지도처럼 탐색합니다"
+                style="--x: 40%; --y: 35%; --size: 98px; --delay: 0.3s;"
+              >
+                <span class="bubble-face">
+                  <span class="glyph">⌖</span>
+                </span>
+                <span class="bubble-label">Maps</span>
+              </button>
+
+              <button
+                class="app-bubble podcasts circle"
+                type="button"
+                data-title="Podcasts"
+                data-meta="듣던 에피소드를 부드럽게 이어 듣습니다"
+                style="--x: 52%; --y: 35%; --size: 100px; --delay: 0.36s;"
+              >
+                <span class="bubble-face">
+                  <span class="glyph">◍</span>
+                </span>
+                <span class="bubble-label">Podcasts</span>
+              </button>
+
+              <button
+                class="app-bubble home rounded"
+                type="button"
+                data-title="Home"
+                data-meta="조명과 기기를 공간별로 제어합니다"
+                style="--x: 64%; --y: 35%; --size: 94px; --delay: 0.42s;"
+              >
+                <span class="bubble-face">
+                  <span class="glyph">⌂</span>
+                </span>
+                <span class="bubble-label">Home</span>
+              </button>
+
+              <button
+                class="app-bubble reminders rounded"
+                type="button"
+                data-title="Reminders"
+                data-meta="해야 할 일을 가까운 위치에 고정합니다"
+                style="--x: 48%; --y: 54%; --size: 102px; --delay: 0.6s;"
+              >
+                <span class="bubble-face">
+                  <span class="glyph">✓</span>
+                </span>
+                <span class="bubble-label">Reminders</span>
+              </button>
+
+              <button
+                class="app-bubble shortcuts circle"
+                type="button"
+                data-title="Shortcuts"
+                data-meta="자주 쓰는 자동화를 한 번에 실행합니다"
+                style="--x: 62%; --y: 54%; --size: 98px; --delay: 0.66s;"
+              >
+                <span class="bubble-face">
+                  <span class="glyph">∞</span>
+                </span>
+                <span class="bubble-label">Shortcuts</span>
+              </button>
+            </div>
+          </section>
+
+          <footer class="home-footer">
+            <div class="page-dots glass-capsule" role="tablist" aria-label="App pages">
+              <button class="page-dot active" type="button" data-page-target="0" aria-label="Main apps"></button>
+              <button class="page-dot" type="button" data-page-target="1" aria-label="Utility apps"></button>
+            </div>
+          </footer>
+        </section>
+
+        <section class="control-center-overlay" id="control-center-overlay" aria-hidden="true">
+          <button
+            class="control-center-scrim"
+            id="control-center-scrim"
+            type="button"
+            aria-label="Close control center"
+          ></button>
+
+          <div class="control-center-shell">
+            <button
+              class="control-center-close"
+              id="control-center-close"
+              type="button"
+              aria-label="Close control center"
+            >
+              ×
+            </button>
+
+            <header class="control-center-header">
+              <p class="cc-eyebrow">Control Center</p>
+              <strong class="cc-clock" id="cc-clock">11:20</strong>
+              <div class="cc-subline">
+                <span id="cc-day">Tue Apr 1</span>
+                <span class="cc-chip success">100</span>
+                <span class="cc-chip">Wi-Fi</span>
+                <span class="cc-chip">VPN</span>
+              </div>
+            </header>
+
+            <div class="control-center-panel glass-capsule">
+              <section class="cc-column">
+                <div class="cc-toggle-grid">
+                  <button class="cc-toggle is-on" type="button" data-toggle="depth">
+                    <span class="cc-toggle-icon">✦</span>
+                    <span class="cc-toggle-label">Depth</span>
+                  </button>
+                  <button class="cc-toggle is-on" type="button" data-toggle="labels">
+                    <span class="cc-toggle-icon">Aa</span>
+                    <span class="cc-toggle-label">Labels</span>
+                  </button>
+                  <button class="cc-toggle is-on" type="button" data-toggle="snap">
+                    <span class="cc-toggle-icon">⇆</span>
+                    <span class="cc-toggle-label">Snap</span>
+                  </button>
+                  <button class="cc-toggle" type="button" data-toggle="dim">
+                    <span class="cc-toggle-icon">◐</span>
+                    <span class="cc-toggle-label">Dim</span>
+                  </button>
+                </div>
+
+                <div class="cc-card cc-slider-card">
+                  <div class="cc-card-head">
+                    <span>Ambient Brightness</span>
+                    <strong id="ambient-value">100%</strong>
+                  </div>
+                  <input
+                    id="ambient-slider"
+                    class="cc-slider"
+                    type="range"
+                    min="84"
+                    max="100"
+                    step="1"
+                    value="100"
+                    aria-label="Ambient brightness"
+                  />
+                </div>
+
+                <div class="cc-card media-card">
+                  <div class="media-thumb cc-nav-thumb"></div>
+                  <div class="media-copy">
+                    <strong>Launcher Navigation</strong>
+                    <span>좌우 스와이프 또는 스크롤로 페이지를 넘길 수 있습니다</span>
+                  </div>
+                </div>
+
+                <div class="cc-card scene-card">
+                  <div class="scene-card-main">
+                    <div class="scene-thumb" id="scene-thumb"></div>
+                    <div class="scene-copy">
+                      <strong id="scene-title">Studio White</strong>
+                      <span id="scene-description">깨끗한 흰 배경과 부드러운 그림자</span>
+                    </div>
+                  </div>
+                  <div class="scene-options" role="list" aria-label="Environment presets">
+                    <button class="scene-option is-active" type="button" data-environment="studio">Studio</button>
+                    <button class="scene-option" type="button" data-environment="dunes">Dunes</button>
+                    <button class="scene-option" type="button" data-environment="horizon">Horizon</button>
+                    <button class="scene-option" type="button" data-environment="twilight">Twilight</button>
+                  </div>
+                </div>
+              </section>
+
+              <section class="cc-column cc-actions">
+                <button class="cc-action" type="button" data-arrange="tile">
+                  <span class="cc-action-icon">◫</span>
+                  <span class="cc-action-copy">
+                    <strong>Tile Windows</strong>
+                    <small>열린 창을 균형 있게 나눠 배치</small>
+                  </span>
+                </button>
+
+                <button class="cc-action" type="button" data-arrange="cascade">
+                  <span class="cc-action-icon">⤡</span>
+                  <span class="cc-action-copy">
+                    <strong>Cascade</strong>
+                    <small>macOS처럼 부드럽게 층층이 쌓기</small>
+                  </span>
+                </button>
+
+                <button class="cc-action" type="button" data-arrange="center">
+                  <span class="cc-action-icon">◎</span>
+                  <span class="cc-action-copy">
+                    <strong>Center Stack</strong>
+                    <small>중앙 기준으로 정돈된 스택 만들기</small>
+                  </span>
+                </button>
+
+                <button class="cc-action" type="button" data-arrange="focus">
+                  <span class="cc-action-icon">▣</span>
+                  <span class="cc-action-copy">
+                    <strong>Focus Front Window</strong>
+                    <small>가장 앞 창을 크게 확대</small>
+                  </span>
+                </button>
+
+                <div class="cc-card cc-status-card">
+                  <p class="hud-label">Window Assist</p>
+                  <strong id="cc-window-count">0 windows open</strong>
+                  <span>드래그 중 가장자리에 닿으면 스냅 프리뷰가 나타납니다.</span>
+                </div>
+              </section>
+            </div>
+          </div>
+        </section>
+
+        <div class="snap-preview" id="snap-preview" aria-hidden="true"></div>
+
+        <div class="window-layer" id="window-layer" aria-live="polite"></div>
+
+        <template id="app-window-template">
+          <article class="app-window" role="dialog" aria-label="App window">
+            <div class="window-bar" data-drag-handle>
+              <div class="window-controls">
+                <button class="window-control close" type="button" aria-label="Close window"></button>
+              </div>
+
+              <div class="window-title-group">
+                <div class="window-badge"></div>
+                <div>
+                  <p class="hud-label">Running App</p>
+                  <strong class="window-title">TV</strong>
+                </div>
+              </div>
+
+              <div class="window-size-pill">640 × 420</div>
+            </div>
+
+            <div class="window-body">
+              <section class="window-hero-card">
+                <div class="window-preview"></div>
+                <div class="window-copy">
+                  <p class="hud-label">Window</p>
+                  <h2 class="window-heading">TV</h2>
+                  <p class="window-description">커다란 화면으로 몰입형 콘텐츠를 여는 앱</p>
+                  <div class="window-chip-row">
+                    <span class="window-chip">Resizable</span>
+                    <span class="window-chip window-position-readout">x 0 · y 0</span>
+                  </div>
+                </div>
+              </section>
+
+              <section class="window-grid">
+                <article class="window-panel">
+                  <p class="hud-label">Quick Tips</p>
+                  <ul class="window-list"></ul>
+                </article>
+
+                <article class="window-panel">
+                  <p class="hud-label">Controls</p>
+                  <div class="control-stack">
+                    <div class="control-row">
+                      <span>Move</span>
+                      <strong>상단 바 드래그</strong>
+                    </div>
+                    <div class="control-row">
+                      <span>Resize</span>
+                      <strong>양쪽 아래 ㄴ자 핸들</strong>
+                    </div>
+                    <div class="control-row">
+                      <span>Home</span>
+                      <strong>다른 앱 추가 실행</strong>
+                    </div>
+                  </div>
+                </article>
+              </section>
+            </div>
+
+            <button class="resize-handle resize-n" type="button" data-resize="n" aria-label="Resize north"></button>
+            <button class="resize-handle resize-e" type="button" data-resize="e" aria-label="Resize east"></button>
+            <button class="resize-handle resize-s" type="button" data-resize="s" aria-label="Resize south"></button>
+            <button class="resize-handle resize-w" type="button" data-resize="w" aria-label="Resize west"></button>
+            <button class="resize-handle resize-ne" type="button" data-resize="ne" aria-label="Resize north east"></button>
+            <button
+              class="resize-handle resize-se vision-resize-handle vision-resize-handle-right"
+              type="button"
+              data-resize="se"
+              aria-label="Resize south east"
+            ></button>
+            <button
+              class="resize-handle resize-sw vision-resize-handle vision-resize-handle-left"
+              type="button"
+              data-resize="sw"
+              aria-label="Resize south west"
+            ></button>
+            <button class="resize-handle resize-nw" type="button" data-resize="nw" aria-label="Resize north west"></button>
+          </article>
+        </template>
+      </main>
+
+      <div class="system-dock glass-capsule">
+        <button id="home-toggle" class="home-toggle" type="button" aria-label="Open Home" aria-expanded="false">
+          <span class="home-core">⌂</span>
+        </button>
+
+        <button
+          id="control-center-toggle"
+          class="control-center-toggle"
+          type="button"
+          aria-label="Open Control Center"
+          aria-expanded="false"
+        >
+          <span class="control-center-core">☰</span>
+        </button>
+
+        <div class="dock-status">
+          <p class="hud-label">System</p>
+          <strong id="dock-status-title">Environment Ready</strong>
+          <span id="dock-status-meta">Home 버튼을 눌러 런처를 여세요</span>
         </div>
-      </section>
-
-      <section id="quick-panel" class="panel glass-shell hidden">
-        <h2>빠른 설정</h2>
-        <p class="panel-subtitle">손동작 반응성과 커서 감도를 빠르게 조정합니다.</p>
-
-        <label><input id="camera-toggle" type="checkbox" checked /> 카메라 켜기</label>
-        <button id="restart-tracking" class="ghost-btn">손 추적 재시작</button>
-        <button id="recalibrate" class="ghost-btn">기준 자세 다시 잡기</button>
-
-        <label>민감도 <input id="sensitivity" type="range" min="0.4" max="2.5" step="0.1" value="1.2" /></label>
-        <label>커서 속도 <input id="cursor-speed" type="range" min="0.3" max="3" step="0.1" value="1" /></label>
-        <label><input id="mirror-toggle" type="checkbox" checked /> 좌우 반전</label>
-        <label><input id="mouse-gesture-toggle" type="checkbox" checked /> 마우스 제스처 테스트(Shift+좌클릭)</label>
-
-        <small class="hint">Shift+좌클릭 또는 창 모서리 핸들을 좌클릭 유지하면 핀치(집기)처럼 동작해 클릭/드래그/리사이즈를 테스트할 수 있습니다.</small>
-        <button id="fullscreen" class="accent-btn">전체화면</button>
-      </section>
-
-      <section id="control-center" class="panel control-center glass-shell hidden">
-        <h2>제어 센터</h2>
-        <p class="panel-subtitle">주변광과 화면 느낌을 현재 환경에 맞춥니다.</p>
-        <label>화면 밝기
-          <input id="brightness-slider" type="range" min="20" max="100" step="1" value="100" />
-        </label>
-        <div class="control-row">
-          <span>현재 시간</span>
-          <strong id="current-time">--:--:--</strong>
-        </div>
-      </section>
-
-      <video id="camera" autoplay playsinline muted></video>
-      <canvas id="overlay"></canvas>
-
-      <div class="window glass-shell" data-window-id="main" style="left: 80px; top: 120px; width: 460px; height: 300px;">
-        <div class="titlebar">메인 공간</div>
-        <div class="window-content scrollable">
-          <p>핀치(엄지+검지)로 클릭/드래그/스크롤이 가능합니다.</p>
-          <p>짧게 집기: 클릭, 길게 집기(0.7초): 롱프레스 메뉴.</p>
-          <p>스크롤 영역 테스트:</p>
-          <ul id="demo-list"></ul>
-        </div>
-        <div class="resize-handle"></div>
       </div>
+    </div>
 
-      <div class="window glass-shell" data-window-id="aux-1" style="left: 590px; top: 170px; width: 340px; height: 240px;">
-        <div class="titlebar">콘텐츠 창 A</div>
-        <div class="window-content">창을 집어서 이동해 보세요.</div>
-        <div class="resize-handle"></div>
-      </div>
-
-      <div class="window glass-shell" data-window-id="aux-2" style="left: 330px; top: 440px; width: 380px; height: 230px;">
-        <div class="titlebar">콘텐츠 창 B</div>
-        <div class="window-content">모서리를 집으면 크기 조절됩니다.</div>
-        <div class="resize-handle"></div>
-      </div>
-
-      <button id="gesture-home-button" class="gesture-home-button" type="button" aria-label="홈">홈</button>
-      <div id="virtual-cursor" aria-hidden="true"></div>
-    </main>
-
-    <script type="module" src="app.js"></script>
+    <script src="./app.js"></script>
   </body>
 </html>

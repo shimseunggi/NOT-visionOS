@@ -1,671 +1,1390 @@
-import {
-  FilesetResolver,
-  HandLandmarker,
-} from 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/+esm';
+const clock = document.querySelector("#clock");
+const today = document.querySelector("#today");
+const ccClock = document.querySelector("#cc-clock");
+const ccDay = document.querySelector("#cc-day");
+const launcherOverlay = document.querySelector("#launcher-overlay");
+const controlCenterOverlay = document.querySelector("#control-center-overlay");
+const controlCenterToggle = document.querySelector("#control-center-toggle");
+const controlCenterClose = document.querySelector("#control-center-close");
+const controlCenterScrim = document.querySelector("#control-center-scrim");
+const appPages = document.querySelector("#app-pages");
+const pages = [...document.querySelectorAll(".app-page")];
+const pageDots = [...document.querySelectorAll(".page-dot")];
+const appButtons = [...document.querySelectorAll(".app-bubble")];
+const toggleButtons = [...document.querySelectorAll("[data-toggle]")];
+const arrangeButtons = [...document.querySelectorAll("[data-arrange]")];
+const homeToggle = document.querySelector("#home-toggle");
+const dockStatusTitle = document.querySelector("#dock-status-title");
+const dockStatusMeta = document.querySelector("#dock-status-meta");
+const ccWindowCount = document.querySelector("#cc-window-count");
+const ambientSlider = document.querySelector("#ambient-slider");
+const ambientValue = document.querySelector("#ambient-value");
+const environmentCycleButton = document.querySelector("#environment-cycle");
+const environmentButtons = [...document.querySelectorAll("[data-environment]")];
+const sceneTitle = document.querySelector("#scene-title");
+const sceneDescription = document.querySelector("#scene-description");
+const sceneThumb = document.querySelector("#scene-thumb");
+const windowLayer = document.querySelector("#window-layer");
+const windowTemplate = document.querySelector("#app-window-template");
+const snapPreview = document.querySelector("#snap-preview");
 
-const LONG_PRESS_MS = 700;
-const PINCH_DOWN_RATIO = 0.36;
-const PINCH_UP_RATIO = 0.52;
-const PINCH_UP_WHILE_DRAGGING_RATIO = 0.6;
-const PINCH_STABLE_FRAMES = 3;
-const RELEASE_STABLE_FRAMES = 3;
-const LOST_HAND_GRACE_MS = 240;
-const FLIP_COOLDOWN_MS = 1500;
-const MOTION_DEADZONE_PX = 1.2;
-const CURSOR_INPUT_SMOOTHING = 0.22;
-const CURSOR_JITTER_DEADZONE_PX = 2.2;
-const PINCH_RATIO_SMOOTHING = 0.35;
+const WINDOW_MARGIN = 24;
+const WINDOW_BOTTOM_CLEARANCE = 112;
+const WINDOW_MIN_WIDTH = 420;
+const WINDOW_MIN_HEIGHT = 300;
+const SWIPE_THRESHOLD = 84;
+const SWIPE_PREVIEW_LIMIT = 110;
+const SWIPE_LOCK_RATIO = 1.15;
+const WHEEL_EVENT_COUNT_THRESHOLD = 3;
+const WHEEL_IDLE_RESET_MS = 180;
+const WHEEL_COOLDOWN_MS = 360;
+const VISION_RESIZE_INSIDE_THRESHOLD = 176;
+const VISION_RESIZE_OUTSIDE_THRESHOLD = 64;
+const VISION_RESIZE_BELOW_THRESHOLD = 96;
+const VISION_RESIZE_BOTTOM_HOTZONE = 104;
+const ENVIRONMENTS = [
+  {
+    key: "studio",
+    label: "Studio",
+    title: "Studio White",
+    description: "깨끗한 흰 배경과 부드러운 그림자",
+  },
+  {
+    key: "dunes",
+    label: "Dunes",
+    title: "Golden Dunes",
+    description: "따뜻한 사막빛과 낮은 수평선",
+  },
+  {
+    key: "horizon",
+    label: "Horizon",
+    title: "Blue Horizon",
+    description: "맑은 하늘과 시원한 수평선 반사",
+  },
+  {
+    key: "twilight",
+    label: "Twilight",
+    title: "Twilight Ridge",
+    description: "잔잔한 황혼과 깊이 있는 원경",
+  },
+];
 
-const state = {
-  mode: 'mouse',
-  stream: null,
-  handLandmarker: null,
-  cursor: { x: window.innerWidth / 2, y: window.innerHeight / 2 },
-  smoothed: { x: window.innerWidth / 2, y: window.innerHeight / 2 },
-  pinch: false,
-  pinchStartAt: 0,
-  longPressFired: false,
-  downTarget: null,
-  dragging: false,
-  lastMove: null,
-  z: 10,
-  sensitivity: 1.2,
-  cursorSpeed: 1,
-  mirror: true,
-  calibration: { x: 0, y: 0 },
-  pinchDownFrames: 0,
-  pinchUpFrames: 0,
-  lastHandAt: 0,
-  handDetected: false,
-  mouseGestureEnabled: true,
-  mouseGestureActive: false,
-  stabilizedRaw: null,
-  pinchRatioSmoothed: null,
-  pinchScrollTarget: null,
-  pinchHoverTarget: null,
-  pinchActiveTarget: null,
-  palmOpen: false,
-  palmCenter: null,
-  palmFacing: null,
-  flipArmedFacing: null,
-  lastFlipAt: 0,
-  gestureHomeTimer: null,
-  clockTimer: null,
-};
+let currentPage = "0";
+let currentAppButton = null;
+let interaction = null;
+let nextWindowZIndex = 20;
+let nextWindowOffset = 0;
+let launcherSwipe = null;
+let suppressAppLaunchUntil = 0;
+let launcherWheelCount = 0;
+let launcherWheelStepHint = 1;
+let launcherWheelLastEventAt = 0;
+let launcherWheelCooldownUntil = 0;
+let launcherWheelResetTimer = 0;
+let swipePreviewResetTimer = 0;
+let currentEnvironment = document.body.dataset.environment || ENVIRONMENTS[0].key;
 
-const el = {
-  workspace: document.getElementById('workspace'),
-  video: document.getElementById('camera'),
-  overlay: document.getElementById('overlay'),
-  cursor: document.getElementById('virtual-cursor'),
-  cameraStatus: document.getElementById('camera-status'),
-  modeStatus: document.getElementById('mode-status'),
-  homePanel: document.getElementById('home-panel'),
-  quickPanel: document.getElementById('quick-panel'),
-  controlCenter: document.getElementById('control-center'),
-  cameraToggle: document.getElementById('camera-toggle'),
-  sensitivity: document.getElementById('sensitivity'),
-  cursorSpeed: document.getElementById('cursor-speed'),
-  mirrorToggle: document.getElementById('mirror-toggle'),
-  mouseGestureToggle: document.getElementById('mouse-gesture-toggle'),
-  gestureHomeButton: document.getElementById('gesture-home-button'),
-  controlToggle: document.getElementById('control-toggle'),
-  brightnessSlider: document.getElementById('brightness-slider'),
-  currentTime: document.getElementById('current-time'),
-};
-
-const ctx = el.overlay.getContext('2d');
-
-function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
-function setMode(mode) {
-  state.mode = mode;
-  el.modeStatus.textContent = `모드: ${mode}`;
+function clamp(value, min, max) {
+  return Math.min(Math.max(value, min), max);
 }
 
-function setCameraState(on) {
-  el.cameraStatus.classList.toggle('off', !on);
-  el.cameraStatus.textContent = on ? '카메라 켜짐' : '카메라 꺼짐';
-}
-
-function resizeOverlay() {
-  el.overlay.width = window.innerWidth;
-  el.overlay.height = window.innerHeight;
-}
-
-function moveCursor(x, y) {
-  state.cursor.x = clamp(x, 0, window.innerWidth);
-  state.cursor.y = clamp(y, 0, window.innerHeight);
-  state.smoothed.x += (state.cursor.x - state.smoothed.x) * 0.35;
-  state.smoothed.y += (state.cursor.y - state.smoothed.y) * 0.35;
-  el.cursor.style.left = `${state.smoothed.x}px`;
-  el.cursor.style.top = `${state.smoothed.y}px`;
-  updatePinchHoverFromCursor();
-}
-
-function resetPinchCounters() {
-  state.pinchDownFrames = 0;
-  state.pinchUpFrames = 0;
-}
-
-function computePalmCenter(landmarks) {
-  const points = [landmarks[0], landmarks[5], landmarks[9], landmarks[13], landmarks[17]];
-  const sum = points.reduce((acc, point) => ({ x: acc.x + point.x, y: acc.y + point.y }), { x: 0, y: 0 });
-  return { x: sum.x / points.length, y: sum.y / points.length };
-}
-
-function isPalmOpen(landmarks) {
-  const extendedFingers = [
-    [8, 6],
-    [12, 10],
-    [16, 14],
-    [20, 18],
-  ].every(([tip, pip]) => landmarks[tip].y < landmarks[pip].y - 0.02);
-
-  const spread = Math.abs(landmarks[8].x - landmarks[20].x);
-  const thumbExtended = Math.hypot(
-    landmarks[4].x - landmarks[5].x,
-    landmarks[4].y - landmarks[5].y,
-    landmarks[4].z - landmarks[5].z,
-  ) > 0.11;
-
-  return extendedFingers && spread > 0.24 && thumbExtended;
-}
-
-function computePalmFacing(landmarks) {
-  const wrist = landmarks[0];
-  const indexMcp = landmarks[5];
-  const pinkyMcp = landmarks[17];
-  const v1 = {
-    x: indexMcp.x - wrist.x,
-    y: indexMcp.y - wrist.y,
-    z: indexMcp.z - wrist.z,
-  };
-  const v2 = {
-    x: pinkyMcp.x - wrist.x,
-    y: pinkyMcp.y - wrist.y,
-    z: pinkyMcp.z - wrist.z,
-  };
-  const normal = {
-    x: v1.y * v2.z - v1.z * v2.y,
-    y: v1.z * v2.x - v1.x * v2.z,
-    z: v1.x * v2.y - v1.y * v2.x,
-  };
-  return normal.z;
-}
-
-function updateClock() {
+function updateDateTime() {
   const now = new Date();
-  el.currentTime.textContent = now.toLocaleTimeString('ko-KR', { hour12: false });
-}
-
-function showControlCenter() {
-  el.controlCenter.classList.remove('hidden');
-  updateClock();
-}
-
-function updateGestureHomeButtonPosition() {
-  if (!state.palmCenter) return;
-  const x = (state.mirror ? 1 - state.palmCenter.x : state.palmCenter.x) * window.innerWidth;
-  const y = state.palmCenter.y * window.innerHeight;
-  el.gestureHomeButton.style.left = `${clamp(x, 56, window.innerWidth - 56)}px`;
-  el.gestureHomeButton.style.top = `${clamp(y - 70, 84, window.innerHeight - 56)}px`;
-}
-
-function showGestureHomeButton() {
-  updateGestureHomeButtonPosition();
-  el.gestureHomeButton.classList.add('visible');
-  window.clearTimeout(state.gestureHomeTimer);
-  state.gestureHomeTimer = window.setTimeout(() => {
-    el.gestureHomeButton.classList.remove('visible');
-  }, 2800);
-}
-
-function openHomePanelFromGesture() {
-  window.clearTimeout(state.gestureHomeTimer);
-  el.gestureHomeButton.classList.remove('visible');
-  el.homePanel.classList.remove('hidden');
-}
-
-function nearestPinchable(target) {
-  return target?.closest('.window, .titlebar, .resize-handle, button, input, .scrollable') || null;
-}
-
-function setPinchHoverTarget(target) {
-  if (state.pinchHoverTarget === target) return;
-  state.pinchHoverTarget?.classList.remove('pinch-hover');
-  state.pinchHoverTarget = target;
-  state.pinchHoverTarget?.classList.add('pinch-hover');
-}
-
-function setPinchActiveTarget(target) {
-  if (state.pinchActiveTarget === target) return;
-  state.pinchActiveTarget?.classList.remove('pinch-locked');
-  state.pinchActiveTarget = target;
-  state.pinchActiveTarget?.classList.add('pinch-locked');
-}
-
-function updatePinchHoverFromCursor() {
-  if (state.pinch) return;
-  const hoverTarget = nearestPinchable(document.elementFromPoint(state.smoothed.x, state.smoothed.y));
-  setPinchHoverTarget(hoverTarget);
-}
-
-function populateList() {
-  const list = document.getElementById('demo-list');
-  for (let i = 1; i <= 60; i += 1) {
-    const li = document.createElement('li');
-    li.textContent = `스크롤 아이템 ${i}`;
-    list.append(li);
-  }
-}
-
-function topWindow(windowEl) {
-  state.z += 1;
-  windowEl.style.zIndex = state.z;
-  document.querySelectorAll('.window').forEach((w) => w.classList.remove('focused'));
-  windowEl.classList.add('focused');
-}
-
-function dispatchMouse(type, target, x, y, extra = {}) {
-  if (!target) return;
-  target.dispatchEvent(new MouseEvent(type, {
-    bubbles: true,
-    cancelable: true,
-    clientX: x,
-    clientY: y,
-    buttons: state.pinch ? 1 : 0,
-    ...extra,
-  }));
-}
-
-function startPinch() {
-  state.pinch = true;
-  state.pinchStartAt = performance.now();
-  state.longPressFired = false;
-  state.dragging = false;
-  state.lastMove = { ...state.smoothed };
-  el.cursor.classList.add('pinched');
-
-  if (state.palmOpen) {
-    openHomePanelFromGesture();
-  }
-
-  const target = document.elementFromPoint(state.smoothed.x, state.smoothed.y);
-  if (!target) return;
-
-  const win = target.closest('.window');
-  if (win) topWindow(win);
-
-  state.downTarget = target;
-  state.pinchScrollTarget = target.closest('.scrollable');
-  setPinchHoverTarget(null);
-  setPinchActiveTarget(nearestPinchable(target));
-  dispatchMouse('mousedown', target, state.smoothed.x, state.smoothed.y);
-}
-
-function applyScrollIfNeeded(dx, dy) {
-  const scroller = state.pinchScrollTarget;
-  if (scroller && document.contains(scroller)) {
-    scroller.scrollTop -= dy * 1.8;
-    return true;
-  }
-  return false;
-}
-
-function updatePinchMove() {
-  if (!state.pinch) return;
-
-  const now = performance.now();
-  if (!state.longPressFired && now - state.pinchStartAt >= LONG_PRESS_MS) {
-    state.longPressFired = true;
-    dispatchMouse('contextmenu', state.downTarget, state.smoothed.x, state.smoothed.y);
-  }
-
-  const dx = state.smoothed.x - state.lastMove.x;
-  const dy = state.smoothed.y - state.lastMove.y;
-  if (Math.hypot(dx, dy) > MOTION_DEADZONE_PX) {
-    state.dragging = true;
-    dispatchMouse('mousemove', state.downTarget, state.smoothed.x, state.smoothed.y, { movementX: dx, movementY: dy });
-    applyScrollIfNeeded(dx, dy);
-  }
-
-  state.lastMove = { ...state.smoothed };
-}
-
-function endPinch() {
-  if (!state.pinch) return;
-  const duration = performance.now() - state.pinchStartAt;
-  el.cursor.classList.remove('pinched');
-
-  dispatchMouse('mouseup', state.downTarget, state.smoothed.x, state.smoothed.y);
-  if (!state.longPressFired && duration < LONG_PRESS_MS + 80 && !state.dragging) {
-    dispatchMouse('click', state.downTarget, state.smoothed.x, state.smoothed.y);
-  }
-
-  state.pinch = false;
-  state.downTarget = null;
-  state.pinchScrollTarget = null;
-  state.dragging = false;
-  setPinchActiveTarget(null);
-  updatePinchHoverFromCursor();
-  resetPinchCounters();
-}
-
-function drawDebug(landmarks) {
-  ctx.clearRect(0, 0, el.overlay.width, el.overlay.height);
-  if (!landmarks?.length) return;
-
-  ctx.strokeStyle = 'rgba(130, 193, 255, 0.8)';
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  landmarks.forEach((p) => {
-    const x = (state.mirror ? 1 - p.x : p.x) * window.innerWidth;
-    const y = p.y * window.innerHeight;
-    ctx.moveTo(x + 1, y);
-    ctx.arc(x, y, 3, 0, Math.PI * 2);
+  const timeFormatter = new Intl.DateTimeFormat(undefined, {
+    hour: "2-digit",
+    minute: "2-digit",
   });
-  ctx.stroke();
+  const dayFormatter = new Intl.DateTimeFormat(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  });
+  const weekdayFormatter = new Intl.DateTimeFormat(undefined, {
+    weekday: "long",
+  });
 
-  if (state.palmOpen && state.palmCenter) {
-    const centerX = (state.mirror ? 1 - state.palmCenter.x : state.palmCenter.x) * window.innerWidth;
-    const centerY = state.palmCenter.y * window.innerHeight;
-    ctx.save();
-    ctx.strokeStyle = 'rgba(120, 210, 255, 0.95)';
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.arc(centerX, centerY, 20, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.restore();
-  }
+  const timeText = timeFormatter.format(now);
+  const dayText = dayFormatter.format(now);
+
+  clock.textContent = timeText;
+  ccClock.textContent = timeText;
+  today.textContent = weekdayFormatter.format(now);
+  ccDay.textContent = dayText;
 }
 
-function applyPinchRecognition(pinchRatio) {
-  state.pinchRatioSmoothed = state.pinchRatioSmoothed == null
-    ? pinchRatio
-    : state.pinchRatioSmoothed + (pinchRatio - state.pinchRatioSmoothed) * PINCH_RATIO_SMOOTHING;
-  const stablePinchRatio = state.pinchRatioSmoothed;
+function updateDock(title, meta) {
+  dockStatusTitle.textContent = title;
+  dockStatusMeta.textContent = meta;
+}
 
-  if (!state.pinch) {
-    if (stablePinchRatio < PINCH_DOWN_RATIO) {
-      state.pinchDownFrames += 1;
-      if (state.pinchDownFrames >= PINCH_STABLE_FRAMES) startPinch();
-    } else {
-      state.pinchDownFrames = 0;
-    }
-    state.pinchUpFrames = 0;
+function getOpenWindows() {
+  return [...windowLayer.querySelectorAll(".app-window")];
+}
+
+function getOpenWindowCount() {
+  return getOpenWindows().length;
+}
+
+function getTopWindow() {
+  return getOpenWindows().sort(
+    (a, b) => Number(b.style.zIndex || 0) - Number(a.style.zIndex || 0)
+  )[0] || null;
+}
+
+function updateWindowCountDisplay() {
+  const count = getOpenWindowCount();
+  ccWindowCount.textContent = count === 1 ? "1 window open" : `${count} windows open`;
+}
+
+function getEnvironment(key = currentEnvironment) {
+  return ENVIRONMENTS.find((environment) => environment.key === key) || ENVIRONMENTS[0];
+}
+
+function syncDockStatus(focusedTitle = "") {
+  const count = getOpenWindowCount();
+  const environment = getEnvironment();
+
+  updateWindowCountDisplay();
+
+  if (document.body.classList.contains("control-center-open")) {
+    updateDock(
+      "Control Center",
+      count
+        ? `${environment.title} 배경과 함께 ${count}개 창을 정렬하거나 스냅 보조를 조정할 수 있습니다`
+        : `${environment.title} 배경과 씬을 조정할 수 있습니다`
+    );
     return;
   }
 
-  const releaseThreshold = state.dragging ? PINCH_UP_WHILE_DRAGGING_RATIO : PINCH_UP_RATIO;
-  if (stablePinchRatio > releaseThreshold) {
-    state.pinchUpFrames += 1;
-    if (state.pinchUpFrames >= RELEASE_STABLE_FRAMES) endPinch();
-  } else {
-    state.pinchUpFrames = 0;
-  }
-}
-
-function updateFromHand(landmarks) {
-  const hasHand = landmarks?.length;
-  if (!hasHand) {
-    if (state.handDetected && performance.now() - state.lastHandAt > LOST_HAND_GRACE_MS) {
-      state.handDetected = false;
-      if (state.pinch) endPinch();
-      resetPinchCounters();
-      state.stabilizedRaw = null;
-      state.pinchRatioSmoothed = null;
-      setPinchHoverTarget(null);
-      setPinchActiveTarget(null);
-      state.palmOpen = false;
-      state.palmCenter = null;
-      state.palmFacing = null;
-      state.flipArmedFacing = null;
-      ctx.clearRect(0, 0, el.overlay.width, el.overlay.height);
-    }
+  if (document.body.classList.contains("launcher-open")) {
+    updateDock("Home", count ? `${count}개의 창이 열린 상태입니다` : "앱 아이콘을 눌러 새 창을 여세요");
     return;
   }
 
-  state.handDetected = true;
-  state.lastHandAt = performance.now();
-
-  const l = landmarks[0];
-  const tip = l[8];
-  const thumb = l[4];
-
-  state.palmCenter = computePalmCenter(l);
-  state.palmOpen = isPalmOpen(l);
-  state.palmFacing = computePalmFacing(l);
-
-  if (state.palmOpen) {
-    if (state.flipArmedFacing == null) {
-      state.flipArmedFacing = state.palmFacing;
-    } else {
-      const flipped = Math.sign(state.flipArmedFacing) !== Math.sign(state.palmFacing)
-        && Math.abs(state.flipArmedFacing) > 0.01
-        && Math.abs(state.palmFacing) > 0.01;
-      const cooledDown = performance.now() - state.lastFlipAt > FLIP_COOLDOWN_MS;
-      if (flipped && cooledDown) {
-        state.lastFlipAt = performance.now();
-        showControlCenter();
-        state.flipArmedFacing = state.palmFacing;
-      }
-    }
-  } else {
-    state.flipArmedFacing = null;
+  if (!count) {
+    updateDock("Environment Ready", `${environment.title} 배경 · Home 버튼을 눌러 런처를 여세요`);
+    return;
   }
 
-  if (el.gestureHomeButton.classList.contains('visible')) updateGestureHomeButtonPosition();
+  updateDock(
+    `${count} Windows Open`,
+    focusedTitle
+      ? `${focusedTitle} 포함, 스냅과 정렬 보조를 사용할 수 있습니다`
+      : "여러 앱 창을 동시에 띄우고 정렬할 수 있습니다"
+  );
+}
 
-  const rawX = ((state.mirror ? 1 - tip.x : tip.x) + state.calibration.x) * window.innerWidth;
-  const rawY = (tip.y + state.calibration.y) * window.innerHeight;
-  if (!state.stabilizedRaw) {
-    state.stabilizedRaw = { x: rawX, y: rawY };
-  } else {
-    const deltaX = rawX - state.stabilizedRaw.x;
-    const deltaY = rawY - state.stabilizedRaw.y;
-    if (Math.hypot(deltaX, deltaY) >= CURSOR_JITTER_DEADZONE_PX) {
-      state.stabilizedRaw.x += deltaX * CURSOR_INPUT_SMOOTHING;
-      state.stabilizedRaw.y += deltaY * CURSOR_INPUT_SMOOTHING;
+function setEnvironment(key) {
+  const environment = getEnvironment(key);
+
+  currentEnvironment = environment.key;
+  document.body.dataset.environment = environment.key;
+
+  sceneTitle.textContent = environment.title;
+  sceneDescription.textContent = environment.description;
+  sceneThumb.dataset.environment = environment.key;
+  sceneThumb.setAttribute("aria-label", environment.title);
+  sceneThumb.setAttribute("title", environment.title);
+
+  environmentButtons.forEach((button) => {
+    button.classList.toggle("is-active", button.dataset.environment === environment.key);
+  });
+
+  environmentCycleButton.setAttribute(
+    "aria-label",
+    `Cycle environment. Current environment is ${environment.title}`
+  );
+  environmentCycleButton.setAttribute("title", environment.title);
+
+  applyAmbient();
+  syncDockStatus(getTopWindow()?.dataset.appTitle ?? currentAppButton?.dataset.title ?? "");
+}
+
+function cycleEnvironment(step = 1) {
+  const currentIndex = ENVIRONMENTS.findIndex(
+    (environment) => environment.key === currentEnvironment
+  );
+  const nextIndex =
+    ((currentIndex === -1 ? 0 : currentIndex) + step + ENVIRONMENTS.length) %
+    ENVIRONMENTS.length;
+
+  setEnvironment(ENVIRONMENTS[nextIndex].key);
+}
+
+function setSelected(button) {
+  if (!button) {
+    return;
+  }
+
+  const currentPageEl = button.closest(".app-page");
+  currentPage = currentPageEl.dataset.page;
+
+  appButtons.forEach((item) => {
+    const samePage = item.closest(".app-page") === currentPageEl;
+    item.classList.toggle("active", samePage && item === button);
+  });
+}
+
+function setPage(pageIndex) {
+  currentPage = pageIndex;
+
+  pages.forEach((page) => {
+    page.classList.toggle("active", page.dataset.page === pageIndex);
+  });
+
+  pageDots.forEach((dot) => {
+    dot.classList.toggle("active", dot.dataset.pageTarget === pageIndex);
+  });
+
+  const selectedOnPage =
+    currentAppButton && currentAppButton.closest(".app-page").dataset.page === pageIndex
+      ? currentAppButton
+      : document.querySelector(`.app-page[data-page="${pageIndex}"] .app-bubble`);
+
+  setSelected(selectedOnPage);
+}
+
+function getPageNumber(pageIndex = currentPage) {
+  return pages.findIndex((page) => page.dataset.page === pageIndex);
+}
+
+function setSwipePreview(offsetX) {
+  appPages.style.setProperty(
+    "--swipe-offset",
+    `${clamp(offsetX, -SWIPE_PREVIEW_LIMIT, SWIPE_PREVIEW_LIMIT)}px`
+  );
+}
+
+function clearSwipePreview() {
+  if (swipePreviewResetTimer) {
+    window.clearTimeout(swipePreviewResetTimer);
+    swipePreviewResetTimer = 0;
+  }
+  appPages.style.removeProperty("--swipe-offset");
+}
+
+function scheduleSwipePreviewReset(delay = 140) {
+  if (swipePreviewResetTimer) {
+    window.clearTimeout(swipePreviewResetTimer);
+  }
+
+  swipePreviewResetTimer = window.setTimeout(() => {
+    swipePreviewResetTimer = 0;
+    appPages.style.removeProperty("--swipe-offset");
+  }, delay);
+}
+
+function resetLauncherWheel() {
+  launcherWheelCount = 0;
+  launcherWheelStepHint = 1;
+  launcherWheelLastEventAt = 0;
+  launcherWheelCooldownUntil = 0;
+
+  if (launcherWheelResetTimer) {
+    window.clearTimeout(launcherWheelResetTimer);
+    launcherWheelResetTimer = 0;
+  }
+}
+
+function scheduleLauncherWheelReset() {
+  if (launcherWheelResetTimer) {
+    window.clearTimeout(launcherWheelResetTimer);
+  }
+
+  launcherWheelResetTimer = window.setTimeout(() => {
+    launcherWheelResetTimer = 0;
+    launcherWheelCount = 0;
+  }, WHEEL_IDLE_RESET_MS);
+}
+
+function cancelLauncherSwipe() {
+  if (!launcherSwipe) {
+    clearSwipePreview();
+    return;
+  }
+
+  if (appPages.hasPointerCapture?.(launcherSwipe.pointerId)) {
+    appPages.releasePointerCapture(launcherSwipe.pointerId);
+  }
+
+  launcherSwipe = null;
+  clearSwipePreview();
+}
+
+function resetLauncherNavigationState() {
+  cancelLauncherSwipe();
+  resetLauncherWheel();
+  clearSwipePreview();
+}
+
+function stepLauncherPage(step, ignoreDirection = false) {
+  const currentIndex = getPageNumber();
+  let targetIndex = currentIndex + step;
+
+  if (ignoreDirection) {
+    if (pages.length === 2) {
+      targetIndex = currentIndex === 0 ? 1 : 0;
+    } else if (!pages[targetIndex]) {
+      targetIndex = pages[currentIndex + 1] ? currentIndex + 1 : currentIndex - 1;
     }
   }
 
-  const x = (state.stabilizedRaw.x - window.innerWidth / 2) * state.sensitivity * state.cursorSpeed + window.innerWidth / 2;
-  const y = (state.stabilizedRaw.y - window.innerHeight / 2) * state.sensitivity * state.cursorSpeed + window.innerHeight / 2;
-  moveCursor(x, y);
+  const nextPage = pages[targetIndex];
 
-  const pinchDistance = Math.hypot(thumb.x - tip.x, thumb.y - tip.y, thumb.z - tip.z);
-  const palmAnchor = l[5];
-  const handScale = Math.hypot(palmAnchor.x - l[17].x, palmAnchor.y - l[17].y, palmAnchor.z - l[17].z) || 1;
-  const pinchRatio = pinchDistance / handScale;
-  applyPinchRecognition(pinchRatio);
+  if (!nextPage) {
+    scheduleSwipePreviewReset(120);
+    return false;
+  }
 
-  updatePinchMove();
-  drawDebug(l);
+  setPage(nextPage.dataset.page);
+  suppressAppLaunchUntil = window.performance.now() + 280;
+  return true;
 }
 
-function setupMouseGestureTesting() {
-  window.addEventListener('mousedown', (event) => {
-    if (!state.mouseGestureEnabled || event.button !== 0) return;
-    const wantsPinchGesture = event.shiftKey || !!event.target.closest('.resize-handle');
-    if (!wantsPinchGesture) return;
-    moveCursor(event.clientX, event.clientY);
-    state.mouseGestureActive = true;
-    if (!state.pinch) startPinch();
-    event.preventDefault();
-  }, true);
+function finishLauncherSwipe(pointerId = null) {
+  if (!launcherSwipe) {
+    clearSwipePreview();
+    return;
+  }
 
-  window.addEventListener('mousemove', (event) => {
-    if (!state.mouseGestureEnabled || !state.mouseGestureActive) return;
-    moveCursor(event.clientX, event.clientY);
-    updatePinchMove();
-  }, true);
+  if (pointerId !== null && launcherSwipe.pointerId !== pointerId) {
+    return;
+  }
 
-  window.addEventListener('mouseup', (event) => {
-    if (!state.mouseGestureEnabled || event.button !== 0 || !state.mouseGestureActive) return;
-    moveCursor(event.clientX, event.clientY);
-    state.mouseGestureActive = false;
-    if (state.pinch) endPinch();
-    event.preventDefault();
-  }, true);
+  if (appPages.hasPointerCapture?.(launcherSwipe.pointerId)) {
+    appPages.releasePointerCapture(launcherSwipe.pointerId);
+  }
+
+  const deltaX = launcherSwipe.offsetX;
+  const didSwipe = launcherSwipe.isSwiping && Math.abs(deltaX) >= SWIPE_THRESHOLD;
+
+  if (launcherSwipe.isSwiping) {
+    suppressAppLaunchUntil = window.performance.now() + 280;
+  }
+
+  if (didSwipe) {
+    stepLauncherPage(deltaX < 0 ? 1 : -1, true);
+  }
+
+  launcherSwipe = null;
+  clearSwipePreview();
 }
 
-async function setupHandTracking() {
-  try {
-    const vision = await FilesetResolver.forVisionTasks('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm');
-    state.handLandmarker = await HandLandmarker.createFromOptions(vision, {
-      baseOptions: {
-        modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task',
-      },
-      numHands: 1,
-      runningMode: 'VIDEO',
-      minHandDetectionConfidence: 0.45,
-      minTrackingConfidence: 0.45,
-      minHandPresenceConfidence: 0.45,
+function toggleLauncher(forceOpen) {
+  const shouldOpen =
+    typeof forceOpen === "boolean"
+      ? forceOpen
+      : !document.body.classList.contains("launcher-open");
+
+  document.body.classList.toggle("launcher-open", shouldOpen);
+  homeToggle.classList.toggle("is-active", shouldOpen);
+  homeToggle.setAttribute("aria-expanded", String(shouldOpen));
+  launcherOverlay.setAttribute("aria-hidden", String(!shouldOpen));
+  resetLauncherNavigationState();
+  clearAllWindowResizeCues();
+
+  if (shouldOpen) {
+    setPage(currentPage);
+  }
+
+  syncDockStatus(currentAppButton?.dataset.title ?? "");
+}
+
+function toggleControlCenter(forceOpen) {
+  const shouldOpen =
+    typeof forceOpen === "boolean"
+      ? forceOpen
+      : !document.body.classList.contains("control-center-open");
+
+  document.body.classList.toggle("control-center-open", shouldOpen);
+  controlCenterToggle.classList.toggle("is-active", shouldOpen);
+  controlCenterToggle.setAttribute("aria-expanded", String(shouldOpen));
+  controlCenterOverlay.setAttribute("aria-hidden", String(!shouldOpen));
+  resetLauncherNavigationState();
+  clearAllWindowResizeCues();
+
+  syncDockStatus(getTopWindow()?.dataset.appTitle ?? currentAppButton?.dataset.title ?? "");
+}
+
+function setToggleState(key, isOn) {
+  toggleButtons
+    .filter((button) => button.dataset.toggle === key)
+    .forEach((button) => {
+      button.classList.toggle("is-on", isOn);
+      button.setAttribute("aria-pressed", String(isOn));
     });
-  } catch (error) {
-    console.error(error);
-    setMode('mouse');
+
+  if (key === "depth") {
+    document.body.classList.toggle("depth-off", !isOn);
+  }
+
+  if (key === "labels") {
+    document.body.classList.toggle("labels-off", !isOn);
+  }
+
+  if (key === "dim") {
+    document.body.classList.toggle("dim-room", isOn);
+    applyAmbient();
+  }
+
+  if (key === "snap") {
+    document.body.classList.toggle("snap-off", !isOn);
+    if (!isOn) {
+      hideSnapPreview();
+    }
   }
 }
 
-function detectLoop() {
-  if (state.mode !== 'camera_hand' || !state.handLandmarker || el.video.readyState < 2) {
-    requestAnimationFrame(detectLoop);
+function isToggleOn(key) {
+  return toggleButtons
+    .filter((button) => button.dataset.toggle === key)
+    .some((button) => button.classList.contains("is-on"));
+}
+
+function applyAmbient() {
+  const sliderValue = Number(ambientSlider.value);
+  const dimOffset = document.body.classList.contains("dim-room") ? 5 : 0;
+  const lightness = clamp(sliderValue - dimOffset, 84, 100);
+  const overlayStrength = 0.03 + (100 - lightness) * 0.0022;
+  const brightness = 0.88 + ((lightness - 84) / 16) * 0.12;
+  const saturation = 0.94 + ((lightness - 84) / 16) * 0.08;
+
+  document.documentElement.style.setProperty("--ambient-lightness", `${lightness}%`);
+  document.documentElement.style.setProperty(
+    "--ambient-overlay-strength",
+    overlayStrength.toFixed(3)
+  );
+  document.documentElement.style.setProperty("--scene-brightness", brightness.toFixed(3));
+  document.documentElement.style.setProperty("--scene-saturation", saturation.toFixed(3));
+
+  ambientValue.textContent = `${sliderValue}%`;
+}
+
+function buildTips(title) {
+  return [
+    `${title} 창은 다른 앱 창과 동시에 열 수 있습니다.`,
+    "상단 바를 드래그하면 창 위치를 이동할 수 있습니다.",
+    "드래그 중 가장자리로 가져가면 스냅 프리뷰가 나타납니다.",
+  ];
+}
+
+function getViewportBounds() {
+  return {
+    left: WINDOW_MARGIN,
+    top: WINDOW_MARGIN,
+    right: window.innerWidth - WINDOW_MARGIN,
+    bottom: window.innerHeight - WINDOW_BOTTOM_CLEARANCE,
+  };
+}
+
+function getFrameLimits() {
+  const bounds = getViewportBounds();
+  const maxWidth = Math.max(280, bounds.right - bounds.left);
+  const maxHeight = Math.max(240, bounds.bottom - bounds.top);
+
+  return {
+    bounds,
+    minWidth: Math.min(WINDOW_MIN_WIDTH, maxWidth),
+    minHeight: Math.min(WINDOW_MIN_HEIGHT, maxHeight),
+    maxWidth,
+    maxHeight,
+  };
+}
+
+function getArrangementBounds() {
+  const { bounds } = getFrameLimits();
+
+  return {
+    left: bounds.left,
+    top: bounds.top + 8,
+    right: bounds.right,
+    bottom: bounds.bottom - 6,
+  };
+}
+
+function readWindowFrame(windowEl) {
+  const rect = windowEl.getBoundingClientRect();
+
+  return {
+    left: rect.left,
+    top: rect.top,
+    width: rect.width,
+    height: rect.height,
+  };
+}
+
+function updateWindowLayoutState(windowEl, frame) {
+  windowEl.classList.toggle("is-window-narrow", frame.width < 760);
+  windowEl.classList.toggle("is-window-short", frame.height < 420);
+  windowEl.classList.toggle(
+    "is-window-compact",
+    frame.width < 680 || frame.height < 360
+  );
+}
+
+function updateWindowMetrics(windowEl) {
+  const frame = readWindowFrame(windowEl);
+  const sizeReadout = windowEl.querySelector(".window-size-pill");
+  const positionReadout = windowEl.querySelector(".window-position-readout");
+
+  sizeReadout.textContent = `${Math.round(frame.width)} × ${Math.round(frame.height)}`;
+  positionReadout.textContent = `x ${Math.round(frame.left)} · y ${Math.round(frame.top)}`;
+  updateWindowLayoutState(windowEl, frame);
+}
+
+function applyWindowFrame(windowEl, frame) {
+  const { bounds, minWidth, minHeight, maxWidth, maxHeight } = getFrameLimits();
+  const next = { ...frame };
+
+  next.width = clamp(next.width, minWidth, maxWidth);
+  next.height = clamp(next.height, minHeight, maxHeight);
+  next.left = clamp(next.left, bounds.left, bounds.right - next.width);
+  next.top = clamp(next.top, bounds.top, bounds.bottom - next.height);
+
+  windowEl.style.left = `${next.left}px`;
+  windowEl.style.top = `${next.top}px`;
+  windowEl.style.width = `${next.width}px`;
+  windowEl.style.height = `${next.height}px`;
+
+  updateWindowMetrics(windowEl);
+}
+
+function getDefaultWindowFrame() {
+  const { bounds, minWidth, minHeight, maxWidth, maxHeight } = getFrameLimits();
+  const width = clamp(window.innerWidth * 0.46, minWidth, Math.min(720, maxWidth));
+  const height = clamp(window.innerHeight * 0.44, minHeight, Math.min(500, maxHeight));
+  const offset = (nextWindowOffset % 6) * 24;
+
+  nextWindowOffset += 1;
+
+  return {
+    left: clamp((window.innerWidth - width) / 2 + offset, bounds.left, bounds.right - width),
+    top: clamp((window.innerHeight - height) / 2 - 54 + offset, bounds.top, bounds.bottom - height),
+    width,
+    height,
+  };
+}
+
+function clearWindowZoom(windowEl) {
+  delete windowEl.dataset.zoomed;
+  delete windowEl.dataset.restoreFrame;
+}
+
+function clearWindowResizeCue(windowEl) {
+  if (!windowEl) {
     return;
   }
 
-  const now = performance.now();
-  const result = state.handLandmarker.detectForVideo(el.video, now);
-  updateFromHand(result.landmarks);
-  requestAnimationFrame(detectLoop);
+  windowEl.classList.remove("is-resize-ready", "is-vision-resizing");
+  delete windowEl.dataset.resizeCue;
 }
 
-async function startCamera() {
-  try {
-    state.stream = await navigator.mediaDevices.getUserMedia({
-      video: { width: 1280, height: 720, facingMode: 'user' },
-      audio: false,
-    });
-    el.video.srcObject = state.stream;
-    setCameraState(true);
-    await setupHandTracking();
-    setMode(state.handLandmarker ? 'camera_hand' : 'mouse');
-  } catch (error) {
-    console.warn('camera denied, fallback mouse', error);
-    setCameraState(false);
-    setMode('mouse');
+function clearAllWindowResizeCues(exceptWindow = null) {
+  getOpenWindows().forEach((windowEl) => {
+    if (windowEl !== exceptWindow) {
+      clearWindowResizeCue(windowEl);
+    }
+  });
+}
+
+function getWindowResizeCueDirection(windowEl, clientX, clientY) {
+  if (!windowEl || window.innerWidth <= 1080) {
+    return null;
   }
+
+  const rect = windowEl.getBoundingClientRect();
+  const isWithinVerticalRange =
+    clientY >= rect.bottom - VISION_RESIZE_INSIDE_THRESHOLD &&
+    clientY <= rect.bottom + VISION_RESIZE_BELOW_THRESHOLD;
+  const isWithinRightRange =
+    clientX >= rect.right - VISION_RESIZE_INSIDE_THRESHOLD &&
+    clientX <= rect.right + VISION_RESIZE_OUTSIDE_THRESHOLD;
+  const isWithinLeftRange =
+    clientX <= rect.left + VISION_RESIZE_INSIDE_THRESHOLD &&
+    clientX >= rect.left - VISION_RESIZE_OUTSIDE_THRESHOLD;
+  const isBelowWindow =
+    clientY >= rect.bottom - 28 && clientY <= rect.bottom + VISION_RESIZE_BELOW_THRESHOLD;
+  const isWithinRightBottomHotzone =
+    clientX >= rect.right - VISION_RESIZE_BOTTOM_HOTZONE &&
+    clientX <= rect.right + VISION_RESIZE_OUTSIDE_THRESHOLD;
+  const isWithinLeftBottomHotzone =
+    clientX <= rect.left + VISION_RESIZE_BOTTOM_HOTZONE &&
+    clientX >= rect.left - VISION_RESIZE_OUTSIDE_THRESHOLD;
+
+  if (!isWithinVerticalRange || (!isWithinRightRange && !isWithinLeftRange)) {
+    return null;
+  }
+
+  if (isBelowWindow) {
+    if (isWithinRightBottomHotzone && !isWithinLeftBottomHotzone) {
+      return "se";
+    }
+
+    if (isWithinLeftBottomHotzone && !isWithinRightBottomHotzone) {
+      return "sw";
+    }
+  }
+
+  if (isWithinRightRange && isWithinLeftRange) {
+    const rightDistance = Math.abs(clientX - rect.right);
+    const leftDistance = Math.abs(clientX - rect.left);
+    return rightDistance <= leftDistance ? "se" : "sw";
+  }
+
+  return isWithinRightRange ? "se" : "sw";
 }
 
-function stopCamera() {
-  state.stream?.getTracks().forEach((t) => t.stop());
-  state.stream = null;
-  setCameraState(false);
-  setMode('mouse');
+function applyWindowResizeCue(windowEl, direction, isResizing = false) {
+  if (!windowEl || !direction) {
+    clearWindowResizeCue(windowEl);
+    return;
+  }
+
+  windowEl.dataset.resizeCue = direction;
+  windowEl.classList.add("is-resize-ready");
+  windowEl.classList.toggle("is-vision-resizing", isResizing);
 }
 
-function setupWindows() {
-  const mins = { w: 240, h: 160 };
-  const maxs = { w: window.innerWidth * 0.9, h: window.innerHeight * 0.85 };
-  let action = null;
+function refreshWindowResizeCue(clientX, clientY) {
+  if (
+    document.body.classList.contains("launcher-open") ||
+    document.body.classList.contains("control-center-open") ||
+    window.innerWidth <= 1080
+  ) {
+    clearAllWindowResizeCues();
+    return;
+  }
 
-  function onDown(event) {
-    const win = event.target.closest('.window');
-    if (!win) return;
-    topWindow(win);
+  const activeWindow = getTopWindow();
+  clearAllWindowResizeCues(activeWindow);
 
-    const rect = win.getBoundingClientRect();
-    if (event.target.classList.contains('resize-handle')) {
-      action = { type: 'resize', win, startX: event.clientX, startY: event.clientY, startW: rect.width, startH: rect.height };
+  if (!activeWindow) {
+    return;
+  }
+
+  if (interaction) {
+    if (
+      interaction.type === "resize" &&
+      (interaction.direction === "se" || interaction.direction === "sw") &&
+      interaction.windowEl === activeWindow
+    ) {
+      applyWindowResizeCue(activeWindow, interaction.direction, true);
       return;
     }
 
-    if (event.target.classList.contains('titlebar')) {
-      action = { type: 'move', win, dx: event.clientX - rect.left, dy: event.clientY - rect.top };
-    }
-  }
-
-  function onMove(event) {
-    if (!action) return;
-    const { win } = action;
-    if (action.type === 'move') {
-      win.style.left = `${clamp(event.clientX - action.dx, 0, window.innerWidth - win.offsetWidth)}px`;
-      win.style.top = `${clamp(event.clientY - action.dy, 56, window.innerHeight - win.offsetHeight)}px`;
-    } else {
-      const nextW = clamp(action.startW + (event.clientX - action.startX), mins.w, maxs.w);
-      const nextH = clamp(action.startH + (event.clientY - action.startY), mins.h, maxs.h);
-      win.style.width = `${nextW}px`;
-      win.style.height = `${nextH}px`;
-    }
-  }
-
-  function onUp() { action = null; }
-
-  document.addEventListener('mousedown', onDown);
-  document.addEventListener('mousemove', onMove);
-  document.addEventListener('mouseup', onUp);
-}
-
-function setupMouseFallbackCursor() {
-  window.addEventListener('mousemove', (event) => {
-    if (state.mode !== 'mouse') return;
-    moveCursor(event.clientX, event.clientY);
-  });
-}
-
-function setupUI() {
-  document.getElementById('home-toggle').onclick = () => el.homePanel.classList.toggle('hidden');
-  document.getElementById('quick-toggle').onclick = () => el.quickPanel.classList.toggle('hidden');
-  el.controlToggle.onclick = () => {
-    showControlCenter();
-  };
-  document.getElementById('open-settings').onclick = () => {
-    el.homePanel.classList.add('hidden');
-    el.quickPanel.classList.remove('hidden');
-  };
-
-  document.getElementById('new-window').onclick = () => {
-    const win = document.createElement('div');
-    win.className = 'window';
-    win.style.left = `${120 + Math.random() * 420}px`;
-    win.style.top = `${120 + Math.random() * 320}px`;
-    win.style.width = '320px';
-    win.style.height = '210px';
-    win.innerHTML = '<div class="titlebar">새 창</div><div class="window-content">새 창 내용</div><div class="resize-handle"></div>';
-    el.workspace.append(win);
-    topWindow(win);
-  };
-
-  document.getElementById('reset-layout').onclick = () => location.reload();
-  document.getElementById('restart-tracking').onclick = async () => {
-    if (state.stream) {
-      await setupHandTracking();
-      setMode(state.handLandmarker ? 'camera_hand' : 'mouse');
-    }
-  };
-
-  document.getElementById('recalibrate').onclick = () => {
-    state.calibration = {
-      x: (0.5 - state.smoothed.x / window.innerWidth) * 0.15,
-      y: (0.5 - state.smoothed.y / window.innerHeight) * 0.15,
-    };
-  };
-
-  el.cameraToggle.onchange = async (event) => {
-    if (event.target.checked) {
-      await startCamera();
-    } else {
-      stopCamera();
-    }
-  };
-
-  el.sensitivity.oninput = (event) => { state.sensitivity = Number(event.target.value); };
-  el.cursorSpeed.oninput = (event) => { state.cursorSpeed = Number(event.target.value); };
-  el.mirrorToggle.onchange = (event) => { state.mirror = event.target.checked; };
-  el.mouseGestureToggle.onchange = (event) => {
-    state.mouseGestureEnabled = event.target.checked;
-    if (!state.mouseGestureEnabled && state.mouseGestureActive) {
-      state.mouseGestureActive = false;
-      if (state.pinch) endPinch();
-    }
-  };
-
-  el.gestureHomeButton.onclick = () => {
-    el.homePanel.classList.remove('hidden');
-    el.gestureHomeButton.classList.remove('visible');
-  };
-
-  el.brightnessSlider.oninput = (event) => {
-    const value = Number(event.target.value);
-    document.documentElement.style.setProperty('--screen-brightness', `${value / 100}`);
-  };
-
-  state.clockTimer = window.setInterval(updateClock, 1000);
-  updateClock();
-
-  document.getElementById('fullscreen').onclick = async () => {
-    if (!document.fullscreenElement) await document.documentElement.requestFullscreen();
-    else await document.exitFullscreen();
-  };
-}
-
-async function init() {
-  resizeOverlay();
-  populateList();
-  setupWindows();
-  setupMouseFallbackCursor();
-  setupMouseGestureTesting();
-  setupUI();
-  window.addEventListener('resize', resizeOverlay);
-
-  if (!window.isSecureContext) {
-    setCameraState(false);
-    setMode('mouse');
+    clearWindowResizeCue(activeWindow);
     return;
   }
 
-  await startCamera();
-  requestAnimationFrame(detectLoop);
+  applyWindowResizeCue(activeWindow, getWindowResizeCueDirection(activeWindow, clientX, clientY));
 }
 
-init();
+function getSnapFrame(mode) {
+  const bounds = getArrangementBounds();
+  const gap = 16;
+  const fullWidth = bounds.right - bounds.left;
+  const fullHeight = bounds.bottom - bounds.top;
+  const halfWidth = (fullWidth - gap) / 2;
+  const halfHeight = (fullHeight - gap) / 2;
+
+  switch (mode) {
+    case "maximize":
+      return {
+        left: bounds.left,
+        top: bounds.top,
+        width: fullWidth,
+        height: fullHeight,
+      };
+    case "left":
+      return {
+        left: bounds.left,
+        top: bounds.top,
+        width: halfWidth,
+        height: fullHeight,
+      };
+    case "right":
+      return {
+        left: bounds.left + halfWidth + gap,
+        top: bounds.top,
+        width: halfWidth,
+        height: fullHeight,
+      };
+    case "top-left":
+      return {
+        left: bounds.left,
+        top: bounds.top,
+        width: halfWidth,
+        height: halfHeight,
+      };
+    case "top-right":
+      return {
+        left: bounds.left + halfWidth + gap,
+        top: bounds.top,
+        width: halfWidth,
+        height: halfHeight,
+      };
+    case "bottom-left":
+      return {
+        left: bounds.left,
+        top: bounds.top + halfHeight + gap,
+        width: halfWidth,
+        height: halfHeight,
+      };
+    case "bottom-right":
+      return {
+        left: bounds.left + halfWidth + gap,
+        top: bounds.top + halfHeight + gap,
+        width: halfWidth,
+        height: halfHeight,
+      };
+    default:
+      return null;
+  }
+}
+
+function getSnapTarget(clientX, clientY) {
+  if (document.body.classList.contains("snap-off")) {
+    return null;
+  }
+
+  const cornerThreshold = 132;
+  const edgeThreshold = 86;
+  const bottomEdge = window.innerHeight - WINDOW_BOTTOM_CLEARANCE;
+
+  if (clientY < cornerThreshold && clientX < cornerThreshold) {
+    return "top-left";
+  }
+
+  if (clientY < cornerThreshold && clientX > window.innerWidth - cornerThreshold) {
+    return "top-right";
+  }
+
+  if (clientY > bottomEdge - cornerThreshold && clientX < cornerThreshold) {
+    return "bottom-left";
+  }
+
+  if (clientY > bottomEdge - cornerThreshold && clientX > window.innerWidth - cornerThreshold) {
+    return "bottom-right";
+  }
+
+  if (clientY < edgeThreshold) {
+    return "maximize";
+  }
+
+  if (clientX < edgeThreshold) {
+    return "left";
+  }
+
+  if (clientX > window.innerWidth - edgeThreshold) {
+    return "right";
+  }
+
+  return null;
+}
+
+function showSnapPreview(mode) {
+  const frame = getSnapFrame(mode);
+  if (!frame) {
+    hideSnapPreview();
+    return;
+  }
+
+  snapPreview.style.left = `${frame.left}px`;
+  snapPreview.style.top = `${frame.top}px`;
+  snapPreview.style.width = `${frame.width}px`;
+  snapPreview.style.height = `${frame.height}px`;
+  snapPreview.classList.add("visible");
+  snapPreview.setAttribute("aria-hidden", "false");
+}
+
+function hideSnapPreview() {
+  snapPreview.classList.remove("visible");
+  snapPreview.setAttribute("aria-hidden", "true");
+}
+
+function populateWindow(windowEl, button) {
+  const title = button.dataset.title;
+  const meta = button.dataset.meta;
+  const iconMarkup = button.querySelector(".bubble-face").outerHTML;
+
+  windowEl.querySelector(".window-badge").innerHTML = iconMarkup;
+  windowEl.querySelector(".window-preview").innerHTML = iconMarkup;
+  windowEl.querySelector(".window-title").textContent = title;
+  windowEl.querySelector(".window-heading").textContent = title;
+  windowEl.querySelector(".window-description").textContent = meta;
+  windowEl.querySelector(".window-list").innerHTML = buildTips(title)
+    .map((tip) => `<li>${tip}</li>`)
+    .join("");
+  windowEl.dataset.appTitle = title;
+}
+
+function bringWindowToFront(windowEl) {
+  getOpenWindows().forEach((item) => {
+    item.classList.remove("is-active");
+    clearWindowResizeCue(item);
+  });
+  nextWindowZIndex += 1;
+  windowEl.style.zIndex = String(nextWindowZIndex);
+  windowEl.classList.add("is-active");
+  syncDockStatus(windowEl.dataset.appTitle ?? "");
+}
+
+function toggleWindowZoom(windowEl, forceMaximize = null) {
+  if (!windowEl) {
+    return;
+  }
+
+  const isAlreadyZoomed = windowEl.dataset.zoomed === "true";
+  const shouldMaximize =
+    forceMaximize === null
+      ? !isAlreadyZoomed
+      : forceMaximize;
+
+  if (shouldMaximize) {
+    if (!isAlreadyZoomed) {
+      windowEl.dataset.restoreFrame = JSON.stringify(readWindowFrame(windowEl));
+    }
+    windowEl.dataset.zoomed = "true";
+    applyWindowFrame(windowEl, getSnapFrame("maximize"));
+    bringWindowToFront(windowEl);
+    return;
+  }
+
+  const restoreFrame = windowEl.dataset.restoreFrame
+    ? JSON.parse(windowEl.dataset.restoreFrame)
+    : getDefaultWindowFrame();
+  clearWindowZoom(windowEl);
+  applyWindowFrame(windowEl, restoreFrame);
+  bringWindowToFront(windowEl);
+}
+
+function arrangeWindows(mode) {
+  const windows = getOpenWindows().sort(
+    (a, b) => Number(a.style.zIndex || 0) - Number(b.style.zIndex || 0)
+  );
+
+  if (!windows.length) {
+    return;
+  }
+
+  const bounds = getArrangementBounds();
+  const gap = 18;
+
+  if (mode === "focus") {
+    toggleWindowZoom(getTopWindow(), true);
+    syncDockStatus(getTopWindow()?.dataset.appTitle ?? "");
+    return;
+  }
+
+  const frames = [];
+
+  if (mode === "tile") {
+    const count = windows.length;
+    const cols = Math.ceil(Math.sqrt(count));
+    const rows = Math.ceil(count / cols);
+    const width = (bounds.right - bounds.left - gap * (cols - 1)) / cols;
+    const height = (bounds.bottom - bounds.top - gap * (rows - 1)) / rows;
+
+    windows.forEach((_, index) => {
+      const row = Math.floor(index / cols);
+      const col = index % cols;
+      frames.push({
+        left: bounds.left + col * (width + gap),
+        top: bounds.top + row * (height + gap),
+        width,
+        height,
+      });
+    });
+  }
+
+  if (mode === "cascade") {
+    const width = clamp((bounds.right - bounds.left) * 0.58, WINDOW_MIN_WIDTH, 680);
+    const height = clamp((bounds.bottom - bounds.top) * 0.62, WINDOW_MIN_HEIGHT, 460);
+    const step = 28;
+    const baseLeft = bounds.left + 18;
+    const baseTop = bounds.top + 18;
+    const cycle = Math.max(1, Math.floor((bounds.right - bounds.left - width) / step));
+
+    windows.forEach((_, index) => {
+      const shift = (index % Math.max(4, cycle)) * step;
+      frames.push({
+        left: baseLeft + shift,
+        top: baseTop + shift,
+        width,
+        height,
+      });
+    });
+  }
+
+  if (mode === "center") {
+    const width = clamp((bounds.right - bounds.left) * 0.5, WINDOW_MIN_WIDTH, 640);
+    const height = clamp((bounds.bottom - bounds.top) * 0.56, WINDOW_MIN_HEIGHT, 440);
+    const startOffset = -((windows.length - 1) * 18) / 2;
+
+    windows.forEach((_, index) => {
+      const offset = startOffset + index * 18;
+      frames.push({
+        left: (window.innerWidth - width) / 2 + offset,
+        top: (window.innerHeight - WINDOW_BOTTOM_CLEARANCE - height) / 2 + offset,
+        width,
+        height,
+      });
+    });
+  }
+
+  windows.forEach((windowEl, index) => {
+    clearWindowZoom(windowEl);
+    applyWindowFrame(windowEl, frames[index]);
+    bringWindowToFront(windowEl);
+  });
+}
+
+function openWindow(button) {
+  if (window.performance.now() < suppressAppLaunchUntil) {
+    return;
+  }
+
+  currentAppButton = button;
+  setSelected(button);
+
+  const windowEl = windowTemplate.content.firstElementChild.cloneNode(true);
+  populateWindow(windowEl, button);
+  windowLayer.append(windowEl);
+  applyWindowFrame(windowEl, getDefaultWindowFrame());
+  bringWindowToFront(windowEl);
+  document.body.classList.add("window-open");
+
+  requestAnimationFrame(() => {
+    windowEl.classList.add("visible");
+  });
+
+  toggleLauncher(false);
+  syncDockStatus(button.dataset.title);
+}
+
+function closeWindow(windowEl) {
+  if (!windowEl) {
+    return;
+  }
+
+  if (interaction?.windowEl === windowEl) {
+    interaction = null;
+  }
+
+  clearWindowResizeCue(windowEl);
+  windowEl.classList.remove("visible");
+
+  window.setTimeout(() => {
+    windowEl.remove();
+
+    const remainingTopWindow = getTopWindow();
+
+    if (!getOpenWindowCount()) {
+      document.body.classList.remove("window-open");
+    } else if (remainingTopWindow) {
+      bringWindowToFront(remainingTopWindow);
+    }
+
+    syncDockStatus(remainingTopWindow?.dataset.appTitle ?? currentAppButton?.dataset.title ?? "");
+  }, 180);
+}
+
+function startInteraction(event, windowEl, captureElement, type, direction = "") {
+  if (!windowEl || document.body.classList.contains("launcher-open") || document.body.classList.contains("control-center-open")) {
+    return;
+  }
+
+  if (window.innerWidth <= 1080) {
+    return;
+  }
+
+  event.preventDefault();
+  clearWindowZoom(windowEl);
+  bringWindowToFront(windowEl);
+  windowEl.classList.add("is-interacting");
+  clearAllWindowResizeCues(windowEl);
+
+  interaction = {
+    windowEl,
+    captureElement,
+    pointerId: event.pointerId,
+    type,
+    direction,
+    startX: event.clientX,
+    startY: event.clientY,
+    frame: readWindowFrame(windowEl),
+    snapMode: null,
+  };
+
+  if (type === "resize" && (direction === "se" || direction === "sw")) {
+    applyWindowResizeCue(windowEl, direction, true);
+  }
+
+  captureElement.setPointerCapture(event.pointerId);
+}
+
+function handleInteractionMove(event) {
+  if (!interaction || event.pointerId !== interaction.pointerId) {
+    return;
+  }
+
+  const deltaX = event.clientX - interaction.startX;
+  const deltaY = event.clientY - interaction.startY;
+
+  if (interaction.type === "drag") {
+    applyWindowFrame(interaction.windowEl, {
+      left: interaction.frame.left + deltaX,
+      top: interaction.frame.top + deltaY,
+      width: interaction.frame.width,
+      height: interaction.frame.height,
+    });
+
+    interaction.snapMode = getSnapTarget(event.clientX, event.clientY);
+
+    if (interaction.snapMode) {
+      showSnapPreview(interaction.snapMode);
+    } else {
+      hideSnapPreview();
+    }
+    return;
+  }
+
+  const next = { ...interaction.frame };
+  const direction = interaction.direction;
+  const { bounds, minWidth, minHeight } = getFrameLimits();
+
+  if (direction.includes("e")) {
+    next.width = interaction.frame.width + deltaX;
+  }
+
+  if (direction.includes("s")) {
+    next.height = interaction.frame.height + deltaY;
+  }
+
+  if (direction.includes("w")) {
+    const width = clamp(
+      interaction.frame.width - deltaX,
+      minWidth,
+      interaction.frame.left + interaction.frame.width - bounds.left
+    );
+    next.width = width;
+    next.left = interaction.frame.left + (interaction.frame.width - width);
+  }
+
+  if (direction.includes("n")) {
+    const height = clamp(
+      interaction.frame.height - deltaY,
+      minHeight,
+      interaction.frame.top + interaction.frame.height - bounds.top
+    );
+    next.height = height;
+    next.top = interaction.frame.top + (interaction.frame.height - height);
+  }
+
+  applyWindowFrame(interaction.windowEl, next);
+}
+
+function endInteraction(event) {
+  if (!interaction || event.pointerId !== interaction.pointerId) {
+    return;
+  }
+
+  const finishedInteraction = interaction;
+
+  if (finishedInteraction.captureElement.hasPointerCapture(event.pointerId)) {
+    finishedInteraction.captureElement.releasePointerCapture(event.pointerId);
+  }
+
+  if (finishedInteraction.type === "drag" && finishedInteraction.snapMode) {
+    applyWindowFrame(finishedInteraction.windowEl, getSnapFrame(finishedInteraction.snapMode));
+  }
+
+  if (
+    finishedInteraction.type === "resize" &&
+    (finishedInteraction.direction === "se" || finishedInteraction.direction === "sw")
+  ) {
+    finishedInteraction.windowEl.classList.remove("is-vision-resizing");
+  }
+
+  finishedInteraction.windowEl.classList.remove("is-interacting");
+  interaction = null;
+  refreshWindowResizeCue(event.clientX, event.clientY);
+  hideSnapPreview();
+}
+
+function handleWindowResizeCuePointerMove(event) {
+  refreshWindowResizeCue(event.clientX, event.clientY);
+}
+
+function handleParallax(event) {
+  if (document.body.classList.contains("depth-off") || window.innerWidth <= 1080) {
+    appPages.style.removeProperty("--stage-rotate-x");
+    appPages.style.removeProperty("--stage-rotate-y");
+    return;
+  }
+
+  const x = event.clientX / window.innerWidth - 0.5;
+  const y = event.clientY / window.innerHeight - 0.5;
+  appPages.style.setProperty("--stage-rotate-x", `${y * -4}deg`);
+  appPages.style.setProperty("--stage-rotate-y", `${x * 6}deg`);
+}
+
+function handleLauncherSwipeStart(event) {
+  if (!document.body.classList.contains("launcher-open") || document.body.classList.contains("control-center-open")) {
+    return;
+  }
+
+  if (event.button !== undefined && event.button !== 0) {
+    return;
+  }
+
+  resetLauncherWheel();
+
+  launcherSwipe = {
+    pointerId: event.pointerId,
+    startX: event.clientX,
+    startY: event.clientY,
+    offsetX: 0,
+    isSwiping: false,
+  };
+}
+
+function handleLauncherSwipeMove(event) {
+  if (!launcherSwipe || launcherSwipe.pointerId !== event.pointerId) {
+    return;
+  }
+
+  const deltaX = event.clientX - launcherSwipe.startX;
+  const deltaY = event.clientY - launcherSwipe.startY;
+
+  if (!launcherSwipe.isSwiping) {
+    if (Math.abs(deltaX) < 14) {
+      return;
+    }
+
+    if (Math.abs(deltaX) <= Math.abs(deltaY) * SWIPE_LOCK_RATIO) {
+      return;
+    }
+
+    launcherSwipe.isSwiping = true;
+    appPages.setPointerCapture?.(event.pointerId);
+  }
+
+  launcherSwipe.offsetX = deltaX;
+  setSwipePreview(deltaX);
+  event.preventDefault();
+}
+
+function getLauncherWheelStepHint(event) {
+  const isHorizontalIntent =
+    Math.abs(event.deltaX) >= Math.abs(event.deltaY) * 0.72 || event.shiftKey;
+
+  if (!isHorizontalIntent) {
+    return 0;
+  }
+
+  const baseDelta =
+    event.shiftKey && Math.abs(event.deltaX) < 0.5 ? event.deltaY : event.deltaX;
+
+  if (!baseDelta) {
+    return 0;
+  }
+
+  return baseDelta < 0 ? 1 : -1;
+}
+
+function handleLauncherWheel(event) {
+  if (!document.body.classList.contains("launcher-open") || document.body.classList.contains("control-center-open")) {
+    return;
+  }
+
+  if (launcherSwipe?.isSwiping) {
+    return;
+  }
+
+  const stepHint = getLauncherWheelStepHint(event);
+
+  if (!stepHint) {
+    return;
+  }
+
+  event.preventDefault();
+
+  const now = window.performance.now();
+
+  if (now < launcherWheelCooldownUntil) {
+    return;
+  }
+
+  if (now - launcherWheelLastEventAt > WHEEL_IDLE_RESET_MS) {
+    launcherWheelCount = 0;
+  }
+
+  launcherWheelLastEventAt = now;
+  launcherWheelStepHint = stepHint;
+  launcherWheelCount += 1;
+  scheduleLauncherWheelReset();
+
+  if (launcherWheelCount < WHEEL_EVENT_COUNT_THRESHOLD) {
+    return;
+  }
+
+  const didMove = stepLauncherPage(launcherWheelStepHint, true);
+  launcherWheelCount = 0;
+
+  if (didMove) {
+    launcherWheelCooldownUntil = now + WHEEL_COOLDOWN_MS;
+    return;
+  }
+}
+
+appButtons.forEach((button) => {
+  button.addEventListener("mouseenter", () => setSelected(button));
+  button.addEventListener("focus", () => setSelected(button));
+  button.addEventListener("click", () => openWindow(button));
+});
+
+pageDots.forEach((dot) => {
+  dot.addEventListener("click", () => setPage(dot.dataset.pageTarget));
+});
+
+appPages.addEventListener("pointerdown", handleLauncherSwipeStart);
+appPages.addEventListener("pointermove", handleLauncherSwipeMove);
+appPages.addEventListener("pointerup", (event) => finishLauncherSwipe(event.pointerId));
+appPages.addEventListener("pointercancel", (event) => finishLauncherSwipe(event.pointerId));
+appPages.addEventListener("wheel", handleLauncherWheel, { passive: false });
+
+toggleButtons.forEach((button) => {
+  button.addEventListener("click", () => {
+    const key = button.dataset.toggle;
+    setToggleState(key, !isToggleOn(key));
+    syncDockStatus(getTopWindow()?.dataset.appTitle ?? currentAppButton?.dataset.title ?? "");
+  });
+});
+
+arrangeButtons.forEach((button) => {
+  button.addEventListener("click", () => {
+    arrangeWindows(button.dataset.arrange);
+    syncDockStatus(getTopWindow()?.dataset.appTitle ?? currentAppButton?.dataset.title ?? "");
+  });
+});
+
+ambientSlider.addEventListener("input", applyAmbient);
+environmentCycleButton.addEventListener("click", () => cycleEnvironment());
+environmentButtons.forEach((button) => {
+  button.addEventListener("click", () => setEnvironment(button.dataset.environment));
+});
+homeToggle.addEventListener("click", () => toggleLauncher());
+controlCenterToggle.addEventListener("click", () => toggleControlCenter());
+controlCenterClose.addEventListener("click", () => toggleControlCenter(false));
+controlCenterScrim.addEventListener("click", () => toggleControlCenter(false));
+
+windowLayer.addEventListener("pointerdown", (event) => {
+  const windowEl = event.target.closest(".app-window");
+  if (!windowEl) {
+    return;
+  }
+
+  if (!document.body.classList.contains("launcher-open") && !document.body.classList.contains("control-center-open")) {
+    bringWindowToFront(windowEl);
+  }
+
+  const closeButton = event.target.closest(".window-control.close");
+  if (closeButton) {
+    return;
+  }
+
+  const resizeHandle = event.target.closest(".resize-handle");
+  if (resizeHandle) {
+    startInteraction(event, windowEl, resizeHandle, "resize", resizeHandle.dataset.resize);
+    return;
+  }
+
+  const dragTarget = event.target.closest("[data-drag-handle]");
+  if (dragTarget && !event.target.closest(".window-controls")) {
+    startInteraction(event, windowEl, dragTarget, "drag");
+  }
+});
+
+windowLayer.addEventListener("dblclick", (event) => {
+  const dragTarget = event.target.closest("[data-drag-handle]");
+  if (!dragTarget || event.target.closest(".window-controls")) {
+    return;
+  }
+
+  toggleWindowZoom(dragTarget.closest(".app-window"));
+});
+
+windowLayer.addEventListener("click", (event) => {
+  const closeButton = event.target.closest(".window-control.close");
+  if (!closeButton) {
+    return;
+  }
+
+  closeWindow(closeButton.closest(".app-window"));
+});
+
+window.addEventListener("pointermove", handleInteractionMove);
+window.addEventListener("pointerup", endInteraction);
+window.addEventListener("pointercancel", endInteraction);
+window.addEventListener("pointermove", handleWindowResizeCuePointerMove);
+window.addEventListener("pointermove", handleParallax);
+window.addEventListener("resize", () => {
+  handleParallax({
+    clientX: window.innerWidth / 2,
+    clientY: window.innerHeight / 2,
+  });
+
+  applyAmbient();
+  hideSnapPreview();
+  clearSwipePreview();
+  cancelLauncherSwipe();
+  resetLauncherWheel();
+  clearAllWindowResizeCues();
+
+  getOpenWindows().forEach((windowEl, index) => {
+    if (window.innerWidth <= 1080) {
+      applyWindowFrame(windowEl, {
+        left: 12,
+        top: 18 + index * 18,
+        width: window.innerWidth - 24,
+        height: Math.max(readWindowFrame(windowEl).height, 420),
+      });
+      return;
+    }
+
+    applyWindowFrame(windowEl, readWindowFrame(windowEl));
+  });
+});
+
+window.addEventListener("keydown", (event) => {
+  if (event.key !== "Escape") {
+    return;
+  }
+
+  if (document.body.classList.contains("control-center-open")) {
+    toggleControlCenter(false);
+    return;
+  }
+
+  if (document.body.classList.contains("launcher-open")) {
+    toggleLauncher(false);
+    return;
+  }
+
+  const topWindow = getTopWindow();
+  if (topWindow) {
+    closeWindow(topWindow);
+  }
+});
+
+updateDateTime();
+setInterval(updateDateTime, 1000);
+applyAmbient();
+setPage("0");
+setToggleState("depth", true);
+setToggleState("labels", true);
+setToggleState("snap", true);
+setToggleState("dim", false);
+setEnvironment(currentEnvironment);
+syncDockStatus();
