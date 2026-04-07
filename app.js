@@ -10,6 +10,7 @@ const PINCH_UP_WHILE_DRAGGING_RATIO = 0.6;
 const PINCH_STABLE_FRAMES = 3;
 const RELEASE_STABLE_FRAMES = 3;
 const LOST_HAND_GRACE_MS = 240;
+const FLIP_COOLDOWN_MS = 1500;
 const MOTION_DEADZONE_PX = 1.2;
 const CURSOR_INPUT_SMOOTHING = 0.22;
 const CURSOR_JITTER_DEADZONE_PX = 2.2;
@@ -45,7 +46,11 @@ const state = {
   pinchActiveTarget: null,
   palmOpen: false,
   palmCenter: null,
+  palmFacing: null,
+  flipArmedFacing: null,
+  lastFlipAt: 0,
   gestureHomeTimer: null,
+  clockTimer: null,
 };
 
 const el = {
@@ -57,12 +62,16 @@ const el = {
   modeStatus: document.getElementById('mode-status'),
   homePanel: document.getElementById('home-panel'),
   quickPanel: document.getElementById('quick-panel'),
+  controlCenter: document.getElementById('control-center'),
   cameraToggle: document.getElementById('camera-toggle'),
   sensitivity: document.getElementById('sensitivity'),
   cursorSpeed: document.getElementById('cursor-speed'),
   mirrorToggle: document.getElementById('mirror-toggle'),
   mouseGestureToggle: document.getElementById('mouse-gesture-toggle'),
   gestureHomeButton: document.getElementById('gesture-home-button'),
+  controlToggle: document.getElementById('control-toggle'),
+  brightnessSlider: document.getElementById('brightness-slider'),
+  currentTime: document.getElementById('current-time'),
 };
 
 const ctx = el.overlay.getContext('2d');
@@ -120,6 +129,38 @@ function isPalmOpen(landmarks) {
   ) > 0.11;
 
   return extendedFingers && spread > 0.24 && thumbExtended;
+}
+
+function computePalmFacing(landmarks) {
+  const wrist = landmarks[0];
+  const indexMcp = landmarks[5];
+  const pinkyMcp = landmarks[17];
+  const v1 = {
+    x: indexMcp.x - wrist.x,
+    y: indexMcp.y - wrist.y,
+    z: indexMcp.z - wrist.z,
+  };
+  const v2 = {
+    x: pinkyMcp.x - wrist.x,
+    y: pinkyMcp.y - wrist.y,
+    z: pinkyMcp.z - wrist.z,
+  };
+  const normal = {
+    x: v1.y * v2.z - v1.z * v2.y,
+    y: v1.z * v2.x - v1.x * v2.z,
+    z: v1.x * v2.y - v1.y * v2.x,
+  };
+  return normal.z;
+}
+
+function updateClock() {
+  const now = new Date();
+  el.currentTime.textContent = now.toLocaleTimeString('ko-KR', { hour12: false });
+}
+
+function showControlCenter() {
+  el.controlCenter.classList.remove('hidden');
+  updateClock();
 }
 
 function updateGestureHomeButtonPosition() {
@@ -337,6 +378,8 @@ function updateFromHand(landmarks) {
       setPinchActiveTarget(null);
       state.palmOpen = false;
       state.palmCenter = null;
+      state.palmFacing = null;
+      state.flipArmedFacing = null;
       ctx.clearRect(0, 0, el.overlay.width, el.overlay.height);
     }
     return;
@@ -351,6 +394,26 @@ function updateFromHand(landmarks) {
 
   state.palmCenter = computePalmCenter(l);
   state.palmOpen = isPalmOpen(l);
+  state.palmFacing = computePalmFacing(l);
+
+  if (state.palmOpen) {
+    if (state.flipArmedFacing == null) {
+      state.flipArmedFacing = state.palmFacing;
+    } else {
+      const flipped = Math.sign(state.flipArmedFacing) !== Math.sign(state.palmFacing)
+        && Math.abs(state.flipArmedFacing) > 0.01
+        && Math.abs(state.palmFacing) > 0.01;
+      const cooledDown = performance.now() - state.lastFlipAt > FLIP_COOLDOWN_MS;
+      if (flipped && cooledDown) {
+        state.lastFlipAt = performance.now();
+        showControlCenter();
+        state.flipArmedFacing = state.palmFacing;
+      }
+    }
+  } else {
+    state.flipArmedFacing = null;
+  }
+
   if (el.gestureHomeButton.classList.contains('visible')) updateGestureHomeButtonPosition();
 
   const rawX = ((state.mirror ? 1 - tip.x : tip.x) + state.calibration.x) * window.innerWidth;
@@ -513,6 +576,9 @@ function setupMouseFallbackCursor() {
 function setupUI() {
   document.getElementById('home-toggle').onclick = () => el.homePanel.classList.toggle('hidden');
   document.getElementById('quick-toggle').onclick = () => el.quickPanel.classList.toggle('hidden');
+  el.controlToggle.onclick = () => {
+    showControlCenter();
+  };
   document.getElementById('open-settings').onclick = () => {
     el.homePanel.classList.add('hidden');
     el.quickPanel.classList.remove('hidden');
@@ -568,6 +634,14 @@ function setupUI() {
     el.homePanel.classList.remove('hidden');
     el.gestureHomeButton.classList.remove('visible');
   };
+
+  el.brightnessSlider.oninput = (event) => {
+    const value = Number(event.target.value);
+    document.documentElement.style.setProperty('--screen-brightness', `${value / 100}`);
+  };
+
+  state.clockTimer = window.setInterval(updateClock, 1000);
+  updateClock();
 
   document.getElementById('fullscreen').onclick = async () => {
     if (!document.fullscreenElement) await document.documentElement.requestFullscreen();

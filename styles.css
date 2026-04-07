@@ -1,6 +1,7 @@
 :root {
   color-scheme: dark;
   font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  --screen-brightness: 1;
 }
 
 * { box-sizing: border-box; }
@@ -9,6 +10,15 @@ body {
   min-height: 100vh;
   background: radial-gradient(circle at top, #24334f, #0a0d16 60%);
   color: #ecf1ff;
+}
+
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, calc((1 - var(--screen-brightness)) * 0.7));
+  pointer-events: none;
+  z-index: 1900;
 }
 
 .topbar {
@@ -97,6 +107,17 @@ button { cursor: pointer; }
   line-height: 1.35;
 }
 .home-actions { display: grid; gap: 8px; }
+.control-center {
+  left: auto;
+  right: 20px;
+  width: 280px;
+}
+.control-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 0;
+}
 
 .window {
   position: absolute;
