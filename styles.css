@@ -90,6 +90,12 @@ button { cursor: pointer; }
 
 .panel.hidden { display: none; }
 .panel label { display: grid; gap: 4px; font-size: 13px; }
+.panel .hint {
+  margin: -4px 0 4px;
+  color: rgba(202, 218, 255, 0.85);
+  font-size: 12px;
+  line-height: 1.35;
+}
 .home-actions { display: grid; gap: 8px; }
 
 .window {

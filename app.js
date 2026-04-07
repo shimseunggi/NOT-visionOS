@@ -6,6 +6,10 @@ import {
 const LONG_PRESS_MS = 700;
 const PINCH_DOWN = 0.055;
 const PINCH_UP = 0.07;
+const PINCH_STABLE_FRAMES = 3;
+const RELEASE_STABLE_FRAMES = 3;
+const LOST_HAND_GRACE_MS = 240;
+const MOTION_DEADZONE_PX = 1.2;
 
 const state = {
   mode: 'mouse',
@@ -24,6 +28,12 @@ const state = {
   cursorSpeed: 1,
   mirror: true,
   calibration: { x: 0, y: 0 },
+  pinchDownFrames: 0,
+  pinchUpFrames: 0,
+  lastHandAt: 0,
+  handDetected: false,
+  mouseGestureEnabled: true,
+  mouseGestureActive: false,
 };
 
 const el = {
@@ -39,6 +49,7 @@ const el = {
   sensitivity: document.getElementById('sensitivity'),
   cursorSpeed: document.getElementById('cursor-speed'),
   mirrorToggle: document.getElementById('mirror-toggle'),
+  mouseGestureToggle: document.getElementById('mouse-gesture-toggle'),
 };
 
 const ctx = el.overlay.getContext('2d');
@@ -66,6 +77,11 @@ function moveCursor(x, y) {
   state.smoothed.y += (state.cursor.y - state.smoothed.y) * 0.35;
   el.cursor.style.left = `${state.smoothed.x}px`;
   el.cursor.style.top = `${state.smoothed.y}px`;
+}
+
+function resetPinchCounters() {
+  state.pinchDownFrames = 0;
+  state.pinchUpFrames = 0;
 }
 
 function populateList() {
@@ -136,7 +152,7 @@ function updatePinchMove() {
 
   const dx = state.smoothed.x - state.lastMove.x;
   const dy = state.smoothed.y - state.lastMove.y;
-  if (Math.hypot(dx, dy) > 2) {
+  if (Math.hypot(dx, dy) > MOTION_DEADZONE_PX) {
     state.dragging = true;
     dispatchMouse('mousemove', state.downTarget, state.smoothed.x, state.smoothed.y, { movementX: dx, movementY: dy });
     applyScrollIfNeeded(dx, dy);
@@ -158,6 +174,7 @@ function endPinch() {
   state.pinch = false;
   state.downTarget = null;
   state.dragging = false;
+  resetPinchCounters();
 }
 
 function drawDebug(landmarks) {
@@ -176,8 +193,40 @@ function drawDebug(landmarks) {
   ctx.stroke();
 }
 
+function applyPinchRecognition(pinchDistance) {
+  if (!state.pinch) {
+    if (pinchDistance < PINCH_DOWN) {
+      state.pinchDownFrames += 1;
+      if (state.pinchDownFrames >= PINCH_STABLE_FRAMES) startPinch();
+    } else {
+      state.pinchDownFrames = 0;
+    }
+    state.pinchUpFrames = 0;
+    return;
+  }
+
+  if (pinchDistance > PINCH_UP) {
+    state.pinchUpFrames += 1;
+    if (state.pinchUpFrames >= RELEASE_STABLE_FRAMES) endPinch();
+  } else {
+    state.pinchUpFrames = 0;
+  }
+}
+
 function updateFromHand(landmarks) {
-  if (!landmarks?.length) return;
+  const hasHand = landmarks?.length;
+  if (!hasHand) {
+    if (state.handDetected && performance.now() - state.lastHandAt > LOST_HAND_GRACE_MS) {
+      state.handDetected = false;
+      if (state.pinch) endPinch();
+      resetPinchCounters();
+      ctx.clearRect(0, 0, el.overlay.width, el.overlay.height);
+    }
+    return;
+  }
+
+  state.handDetected = true;
+  state.lastHandAt = performance.now();
 
   const l = landmarks[0];
   const tip = l[8];
@@ -190,14 +239,34 @@ function updateFromHand(landmarks) {
   moveCursor(x, y);
 
   const pinchDistance = Math.hypot(thumb.x - tip.x, thumb.y - tip.y);
-  if (!state.pinch && pinchDistance < PINCH_DOWN) {
-    startPinch();
-  } else if (state.pinch && pinchDistance > PINCH_UP) {
-    endPinch();
-  }
+  applyPinchRecognition(pinchDistance);
 
   updatePinchMove();
   drawDebug(l);
+}
+
+function setupMouseGestureTesting() {
+  window.addEventListener('mousedown', (event) => {
+    if (!state.mouseGestureEnabled || event.button !== 0 || !event.shiftKey) return;
+    moveCursor(event.clientX, event.clientY);
+    state.mouseGestureActive = true;
+    if (!state.pinch) startPinch();
+    event.preventDefault();
+  }, true);
+
+  window.addEventListener('mousemove', (event) => {
+    if (!state.mouseGestureEnabled || !state.mouseGestureActive) return;
+    moveCursor(event.clientX, event.clientY);
+    updatePinchMove();
+  }, true);
+
+  window.addEventListener('mouseup', (event) => {
+    if (!state.mouseGestureEnabled || event.button !== 0 || !state.mouseGestureActive) return;
+    moveCursor(event.clientX, event.clientY);
+    state.mouseGestureActive = false;
+    if (state.pinch) endPinch();
+    event.preventDefault();
+  }, true);
 }
 
 async function setupHandTracking() {
@@ -350,6 +419,13 @@ function setupUI() {
   el.sensitivity.oninput = (event) => { state.sensitivity = Number(event.target.value); };
   el.cursorSpeed.oninput = (event) => { state.cursorSpeed = Number(event.target.value); };
   el.mirrorToggle.onchange = (event) => { state.mirror = event.target.checked; };
+  el.mouseGestureToggle.onchange = (event) => {
+    state.mouseGestureEnabled = event.target.checked;
+    if (!state.mouseGestureEnabled && state.mouseGestureActive) {
+      state.mouseGestureActive = false;
+      if (state.pinch) endPinch();
+    }
+  };
 
   document.getElementById('fullscreen').onclick = async () => {
     if (!document.fullscreenElement) await document.documentElement.requestFullscreen();
@@ -362,6 +438,7 @@ async function init() {
   populateList();
   setupWindows();
   setupMouseFallbackCursor();
+  setupMouseGestureTesting();
   setupUI();
   window.addEventListener('resize', resizeOverlay);
 
