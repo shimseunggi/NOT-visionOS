@@ -1254,7 +1254,7 @@ body.launcher-open .window-layer .app-window {
 }
 
 .vision-resize-handle-left {
-  left: -52px;
+  left: -30px;
   bottom: -30px;
   transform: translate3d(-10px, 10px, 0) scale(0.92);
 }
