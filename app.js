@@ -41,6 +41,11 @@ const state = {
   stabilizedRaw: null,
   pinchRatioSmoothed: null,
   pinchScrollTarget: null,
+  pinchHoverTarget: null,
+  pinchActiveTarget: null,
+  palmOpen: false,
+  palmCenter: null,
+  gestureHomeTimer: null,
 };
 
 const el = {
@@ -57,6 +62,7 @@ const el = {
   cursorSpeed: document.getElementById('cursor-speed'),
   mirrorToggle: document.getElementById('mirror-toggle'),
   mouseGestureToggle: document.getElementById('mouse-gesture-toggle'),
+  gestureHomeButton: document.getElementById('gesture-home-button'),
 };
 
 const ctx = el.overlay.getContext('2d');
@@ -84,11 +90,77 @@ function moveCursor(x, y) {
   state.smoothed.y += (state.cursor.y - state.smoothed.y) * 0.35;
   el.cursor.style.left = `${state.smoothed.x}px`;
   el.cursor.style.top = `${state.smoothed.y}px`;
+  updatePinchHoverFromCursor();
 }
 
 function resetPinchCounters() {
   state.pinchDownFrames = 0;
   state.pinchUpFrames = 0;
+}
+
+function computePalmCenter(landmarks) {
+  const points = [landmarks[0], landmarks[5], landmarks[9], landmarks[13], landmarks[17]];
+  const sum = points.reduce((acc, point) => ({ x: acc.x + point.x, y: acc.y + point.y }), { x: 0, y: 0 });
+  return { x: sum.x / points.length, y: sum.y / points.length };
+}
+
+function isPalmOpen(landmarks) {
+  const extendedFingers = [
+    [8, 6],
+    [12, 10],
+    [16, 14],
+    [20, 18],
+  ].every(([tip, pip]) => landmarks[tip].y < landmarks[pip].y - 0.02);
+
+  const spread = Math.abs(landmarks[8].x - landmarks[20].x);
+  const thumbExtended = Math.hypot(
+    landmarks[4].x - landmarks[5].x,
+    landmarks[4].y - landmarks[5].y,
+    landmarks[4].z - landmarks[5].z,
+  ) > 0.11;
+
+  return extendedFingers && spread > 0.24 && thumbExtended;
+}
+
+function updateGestureHomeButtonPosition() {
+  if (!state.palmCenter) return;
+  const x = (state.mirror ? 1 - state.palmCenter.x : state.palmCenter.x) * window.innerWidth;
+  const y = state.palmCenter.y * window.innerHeight;
+  el.gestureHomeButton.style.left = `${clamp(x, 56, window.innerWidth - 56)}px`;
+  el.gestureHomeButton.style.top = `${clamp(y - 70, 84, window.innerHeight - 56)}px`;
+}
+
+function showGestureHomeButton() {
+  updateGestureHomeButtonPosition();
+  el.gestureHomeButton.classList.add('visible');
+  window.clearTimeout(state.gestureHomeTimer);
+  state.gestureHomeTimer = window.setTimeout(() => {
+    el.gestureHomeButton.classList.remove('visible');
+  }, 2800);
+}
+
+function nearestPinchable(target) {
+  return target?.closest('.window, .titlebar, .resize-handle, button, input, .scrollable') || null;
+}
+
+function setPinchHoverTarget(target) {
+  if (state.pinchHoverTarget === target) return;
+  state.pinchHoverTarget?.classList.remove('pinch-hover');
+  state.pinchHoverTarget = target;
+  state.pinchHoverTarget?.classList.add('pinch-hover');
+}
+
+function setPinchActiveTarget(target) {
+  if (state.pinchActiveTarget === target) return;
+  state.pinchActiveTarget?.classList.remove('pinch-locked');
+  state.pinchActiveTarget = target;
+  state.pinchActiveTarget?.classList.add('pinch-locked');
+}
+
+function updatePinchHoverFromCursor() {
+  if (state.pinch) return;
+  const hoverTarget = nearestPinchable(document.elementFromPoint(state.smoothed.x, state.smoothed.y));
+  setPinchHoverTarget(hoverTarget);
 }
 
 function populateList() {
@@ -127,6 +199,10 @@ function startPinch() {
   state.lastMove = { ...state.smoothed };
   el.cursor.classList.add('pinched');
 
+  if (state.palmOpen) {
+    showGestureHomeButton();
+  }
+
   const target = document.elementFromPoint(state.smoothed.x, state.smoothed.y);
   if (!target) return;
 
@@ -135,6 +211,8 @@ function startPinch() {
 
   state.downTarget = target;
   state.pinchScrollTarget = target.closest('.scrollable');
+  setPinchHoverTarget(null);
+  setPinchActiveTarget(nearestPinchable(target));
   dispatchMouse('mousedown', target, state.smoothed.x, state.smoothed.y);
 }
 
@@ -181,6 +259,8 @@ function endPinch() {
   state.downTarget = null;
   state.pinchScrollTarget = null;
   state.dragging = false;
+  setPinchActiveTarget(null);
+  updatePinchHoverFromCursor();
   resetPinchCounters();
 }
 
@@ -198,6 +278,18 @@ function drawDebug(landmarks) {
     ctx.arc(x, y, 3, 0, Math.PI * 2);
   });
   ctx.stroke();
+
+  if (state.palmOpen && state.palmCenter) {
+    const centerX = (state.mirror ? 1 - state.palmCenter.x : state.palmCenter.x) * window.innerWidth;
+    const centerY = state.palmCenter.y * window.innerHeight;
+    ctx.save();
+    ctx.strokeStyle = 'rgba(120, 210, 255, 0.95)';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, 20, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  }
 }
 
 function applyPinchRecognition(pinchRatio) {
@@ -235,6 +327,10 @@ function updateFromHand(landmarks) {
       resetPinchCounters();
       state.stabilizedRaw = null;
       state.pinchRatioSmoothed = null;
+      setPinchHoverTarget(null);
+      setPinchActiveTarget(null);
+      state.palmOpen = false;
+      state.palmCenter = null;
       ctx.clearRect(0, 0, el.overlay.width, el.overlay.height);
     }
     return;
@@ -246,6 +342,10 @@ function updateFromHand(landmarks) {
   const l = landmarks[0];
   const tip = l[8];
   const thumb = l[4];
+
+  state.palmCenter = computePalmCenter(l);
+  state.palmOpen = isPalmOpen(l);
+  if (el.gestureHomeButton.classList.contains('visible')) updateGestureHomeButtonPosition();
 
   const rawX = ((state.mirror ? 1 - tip.x : tip.x) + state.calibration.x) * window.innerWidth;
   const rawY = (tip.y + state.calibration.y) * window.innerHeight;
@@ -456,6 +556,11 @@ function setupUI() {
       state.mouseGestureActive = false;
       if (state.pinch) endPinch();
     }
+  };
+
+  el.gestureHomeButton.onclick = () => {
+    el.homePanel.classList.remove('hidden');
+    el.gestureHomeButton.classList.remove('visible');
   };
 
   document.getElementById('fullscreen').onclick = async () => {

@@ -133,6 +133,52 @@ button { cursor: pointer; }
   background: rgba(127, 152, 222, 0.9);
 }
 
+
+.window,
+button,
+input,
+.titlebar,
+.resize-handle,
+.scrollable {
+  transition: transform 120ms ease, box-shadow 120ms ease, outline-color 120ms ease, background-color 120ms ease;
+}
+
+.pinch-hover {
+  outline: 2px solid rgba(129, 188, 255, 0.85);
+  box-shadow: 0 0 0 4px rgba(129, 188, 255, 0.2);
+}
+
+.pinch-locked {
+  transform: scale(0.985);
+  box-shadow: 0 0 0 5px rgba(106, 173, 255, 0.3), 0 16px 40px rgba(0, 0, 0, 0.38);
+}
+
+
+.gesture-home-button {
+  position: fixed;
+  left: 50%;
+  top: 80px;
+  transform: translate(-50%, -50%) scale(0.88);
+  border: 1px solid rgba(153, 201, 255, 0.8);
+  border-radius: 999px;
+  background: rgba(39, 89, 179, 0.88);
+  color: #fff;
+  min-width: 72px;
+  padding: 10px 16px;
+  font-weight: 700;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 1800;
+  box-shadow: 0 10px 34px rgba(0, 0, 0, 0.35);
+  transition: opacity 120ms ease, transform 120ms ease;
+}
+
+.gesture-home-button.visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translate(-50%, -50%) scale(1);
+}
+
 #virtual-cursor {
   position: fixed;
   width: 20px;
