@@ -5,7 +5,8 @@ import {
 
 const LONG_PRESS_MS = 700;
 const PINCH_DOWN = 0.055;
-const PINCH_UP = 0.07;
+const PINCH_UP = 0.085;
+const PINCH_UP_WHILE_DRAGGING = 0.1;
 const PINCH_STABLE_FRAMES = 3;
 const RELEASE_STABLE_FRAMES = 3;
 const LOST_HAND_GRACE_MS = 240;
@@ -205,7 +206,8 @@ function applyPinchRecognition(pinchDistance) {
     return;
   }
 
-  if (pinchDistance > PINCH_UP) {
+  const releaseThreshold = state.dragging ? PINCH_UP_WHILE_DRAGGING : PINCH_UP;
+  if (pinchDistance > releaseThreshold) {
     state.pinchUpFrames += 1;
     if (state.pinchUpFrames >= RELEASE_STABLE_FRAMES) endPinch();
   } else {
