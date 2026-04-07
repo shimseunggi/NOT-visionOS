@@ -32,6 +32,8 @@ const WINDOW_MARGIN = 24;
 const WINDOW_BOTTOM_CLEARANCE = 112;
 const WINDOW_MIN_WIDTH = 420;
 const WINDOW_MIN_HEIGHT = 300;
+const MOBILE_WINDOW_MIN_WIDTH = 260;
+const MOBILE_WINDOW_MIN_HEIGHT = 220;
 const SWIPE_THRESHOLD = 84;
 const SWIPE_PREVIEW_LIMIT = 110;
 const SWIPE_LOCK_RATIO = 1.15;
@@ -481,11 +483,14 @@ function getFrameLimits() {
   const bounds = getViewportBounds();
   const maxWidth = Math.max(280, bounds.right - bounds.left);
   const maxHeight = Math.max(240, bounds.bottom - bounds.top);
+  const isCompactViewport = window.innerWidth <= 1080;
+  const preferredMinWidth = isCompactViewport ? MOBILE_WINDOW_MIN_WIDTH : WINDOW_MIN_WIDTH;
+  const preferredMinHeight = isCompactViewport ? MOBILE_WINDOW_MIN_HEIGHT : WINDOW_MIN_HEIGHT;
 
   return {
     bounds,
-    minWidth: Math.min(WINDOW_MIN_WIDTH, maxWidth),
-    minHeight: Math.min(WINDOW_MIN_HEIGHT, maxHeight),
+    minWidth: Math.min(preferredMinWidth, maxWidth),
+    minHeight: Math.min(preferredMinHeight, maxHeight),
     maxWidth,
     maxHeight,
   };
@@ -868,6 +873,7 @@ function arrangeWindows(mode) {
   }
 
   const bounds = getArrangementBounds();
+  const { minWidth, minHeight } = getFrameLimits();
   const gap = 18;
 
   if (mode === "focus") {
@@ -898,8 +904,8 @@ function arrangeWindows(mode) {
   }
 
   if (mode === "cascade") {
-    const width = clamp((bounds.right - bounds.left) * 0.58, WINDOW_MIN_WIDTH, 680);
-    const height = clamp((bounds.bottom - bounds.top) * 0.62, WINDOW_MIN_HEIGHT, 460);
+    const width = clamp((bounds.right - bounds.left) * 0.58, minWidth, 680);
+    const height = clamp((bounds.bottom - bounds.top) * 0.62, minHeight, 460);
     const step = 28;
     const baseLeft = bounds.left + 18;
     const baseTop = bounds.top + 18;
@@ -917,8 +923,8 @@ function arrangeWindows(mode) {
   }
 
   if (mode === "center") {
-    const width = clamp((bounds.right - bounds.left) * 0.5, WINDOW_MIN_WIDTH, 640);
-    const height = clamp((bounds.bottom - bounds.top) * 0.56, WINDOW_MIN_HEIGHT, 440);
+    const width = clamp((bounds.right - bounds.left) * 0.5, minWidth, 640);
+    const height = clamp((bounds.bottom - bounds.top) * 0.56, minHeight, 440);
     const startOffset = -((windows.length - 1) * 18) / 2;
 
     windows.forEach((_, index) => {
